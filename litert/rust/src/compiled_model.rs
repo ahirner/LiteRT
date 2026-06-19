@@ -62,7 +62,15 @@ impl Options {
 
     /// Creates a new set of options with the specified hardware accelerator.
     pub fn create_with_accelerator(accelerator: LiteRtHwAccelerator) -> Result<Self, Error> {
-        let accelerator_c_enum = accelerator.to_c_enum();
+        Self::create_with_accelerators(&[accelerator])
+    }
+
+    /// Creates a new set of options with the specified hardware accelerators.
+    pub fn create_with_accelerators(accelerators: &[LiteRtHwAccelerator]) -> Result<Self, Error> {
+        let accelerator_c_enum = accelerators.iter().fold(
+            LiteRtHwAccelerators_kLiteRtHwAcceleratorNone,
+            |set, accelerator| set | accelerator.to_c_enum(),
+        );
         let options = Self::default()?;
         call_check_status!(
             // SAFETY: options.raw_options is valid because it's created by calling the default() function.
