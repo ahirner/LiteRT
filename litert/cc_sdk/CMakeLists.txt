@@ -115,7 +115,7 @@ target_link_libraries(litert_cc_api
 )
 
 # run_model_simple target for testing.
-add_executable(run_model_simple
+add_executable(run_model_simple EXCLUDE_FROM_ALL
     ${LITERT_CC_SDK_TREE_ROOT}/litert/tools/run_model_simple.cc
 )
 
