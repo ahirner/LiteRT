@@ -189,6 +189,7 @@ impl ElementType {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TensorBufferType {
     Unknown,
     HostMemory,
@@ -203,6 +204,11 @@ pub enum TensorBufferType {
     OpenClTexture,
     OpenClTextureFp16,
     OpenClBufferPacked,
+    MetalBuffer,
+    MetalBufferFp16,
+    MetalTexture,
+    MetalTextureFp16,
+    MetalBufferPacked,
 }
 
 impl TensorBufferType {
@@ -227,6 +233,15 @@ impl TensorBufferType {
             Self::OpenClBufferPacked => {
                 LiteRtTensorBufferType_kLiteRtTensorBufferTypeOpenClBufferPacked
             }
+            Self::MetalBuffer => LiteRtTensorBufferType_kLiteRtTensorBufferTypeMetalBuffer,
+            Self::MetalBufferFp16 => LiteRtTensorBufferType_kLiteRtTensorBufferTypeMetalBufferFp16,
+            Self::MetalTexture => LiteRtTensorBufferType_kLiteRtTensorBufferTypeMetalTexture,
+            Self::MetalTextureFp16 => {
+                LiteRtTensorBufferType_kLiteRtTensorBufferTypeMetalTextureFp16
+            }
+            Self::MetalBufferPacked => {
+                LiteRtTensorBufferType_kLiteRtTensorBufferTypeMetalBufferPacked
+            }
         }
     }
     pub fn from_c_enum(enum_value: LiteRtTensorBufferType) -> Result<TensorBufferType, Error> {
@@ -249,6 +264,17 @@ impl TensorBufferType {
             }
             LiteRtTensorBufferType_kLiteRtTensorBufferTypeOpenClBufferPacked => {
                 Ok(Self::OpenClBufferPacked)
+            }
+            LiteRtTensorBufferType_kLiteRtTensorBufferTypeMetalBuffer => Ok(Self::MetalBuffer),
+            LiteRtTensorBufferType_kLiteRtTensorBufferTypeMetalBufferFp16 => {
+                Ok(Self::MetalBufferFp16)
+            }
+            LiteRtTensorBufferType_kLiteRtTensorBufferTypeMetalTexture => Ok(Self::MetalTexture),
+            LiteRtTensorBufferType_kLiteRtTensorBufferTypeMetalTextureFp16 => {
+                Ok(Self::MetalTextureFp16)
+            }
+            LiteRtTensorBufferType_kLiteRtTensorBufferTypeMetalBufferPacked => {
+                Ok(Self::MetalBufferPacked)
             }
             _ => Err(Error::new(
                 ErrorCause::InvalidTensorBufferTypeEnumValue,
@@ -356,6 +382,18 @@ impl<'a> TensorBuffer<'a> {
             ErrorCause::GetTensorBufferPackedSize
         );
         Ok(size)
+    }
+
+    /// Returns the underlying Metal buffer or texture handle.
+    pub fn metal_memory(&self) -> Result<*mut c_void, Error> {
+        let mut metal_memory: HwMemoryHandle = std::ptr::null_mut();
+        call_check_status!(
+            // SAFETY: self.raw_tensor_buffer is always valid, it's guaranteed to be initialized by
+            // a wrapper function. LiteRT validates whether the backing memory is Metal memory.
+            unsafe { LiteRtGetTensorBufferMetalMemory(self.raw_tensor_buffer, &mut metal_memory) },
+            ErrorCause::GetTensorBufferMetalMemory
+        );
+        Ok(metal_memory)
     }
 
     /// Writes data to the tensor buffer.

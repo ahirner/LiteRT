@@ -39,6 +39,8 @@ pub type LiteRtTensorBuffer = *mut ::std::ffi::c_void;
 
 pub type LiteRtTensorBufferRequirements = *mut ::std::ffi::c_void;
 
+pub type HwMemoryHandle = *mut ::std::ffi::c_void;
+
 pub type LiteRtStatus = ::std::os::raw::c_uint;
 
 pub type LiteRtHwAccelerators = ::std::os::raw::c_int;
@@ -203,7 +205,13 @@ pub const LiteRtTensorBufferType_kLiteRtTensorBufferTypeWebGpuTexture: LiteRtTen
 
 pub const LiteRtTensorBufferType_kLiteRtTensorBufferTypeMetalBuffer: LiteRtTensorBufferType = 30;
 
+pub const LiteRtTensorBufferType_kLiteRtTensorBufferTypeMetalBufferFp16: LiteRtTensorBufferType = 31;
+
 pub const LiteRtTensorBufferType_kLiteRtTensorBufferTypeMetalTexture: LiteRtTensorBufferType = 32;
+
+pub const LiteRtTensorBufferType_kLiteRtTensorBufferTypeMetalTextureFp16: LiteRtTensorBufferType = 33;
+
+pub const LiteRtTensorBufferType_kLiteRtTensorBufferTypeMetalBufferPacked: LiteRtTensorBufferType = 34;
 
 pub const LiteRtTensorBufferType_kLiteRtTensorBufferTypeVulkanBuffer: LiteRtTensorBufferType = 40;
 
@@ -460,6 +468,8 @@ pub fn LiteRtDestroyOptions(options: LiteRtOptions){ unimplemented!() }
 pub fn LiteRtSetOptionsHardwareAccelerators(options: LiteRtOptions, hardware_accelerators: LiteRtHwAcceleratorSet,)-> LiteRtStatus{ unimplemented!() }
 
 pub fn LiteRtCreateManagedTensorBuffer(env: LiteRtEnvironment, buffer_type: LiteRtTensorBufferType, tensor_type: *const LiteRtRankedTensorType, buffer_size: usize, buffer: *mut LiteRtTensorBuffer,)-> LiteRtStatus{ unimplemented!() }
+
+pub fn LiteRtGetTensorBufferMetalMemory(tensor_buffer: LiteRtTensorBuffer, hw_memory_handle: *mut HwMemoryHandle,)-> LiteRtStatus{ unimplemented!() }
 
 pub fn LiteRtGetTensorBufferPackedSize(tensor_buffer: LiteRtTensorBuffer, size: *mut usize,)-> LiteRtStatus{ unimplemented!() }
 
