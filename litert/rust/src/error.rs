@@ -64,6 +64,7 @@ pub enum ErrorCause {
     InvalidElementTypeEnumValue,
     InvalidTensorBufferTypeEnumValue,
     CreateManagedTensorBuffer,
+    GetTensorBufferMetalMemory,
     LockTensorBufferRead,
     LockTensorBufferWrite,
     GetTensorBufferPackedSize,
