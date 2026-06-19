@@ -74,6 +74,13 @@ impl TargetPlatform {
         }
     }
 
+    fn accelerator_runtime_names(&self) -> &'static [&'static str] {
+        match self {
+            TargetPlatform::MacosArm64 => &["libLiteRtMetalAccelerator.dylib"],
+            _ => &[],
+        }
+    }
+
     fn runtime_directory(&self) -> String {
         match self {
             TargetPlatform::AndroidArm64 => "android_arm64".to_string(),
@@ -145,15 +152,39 @@ fn download_runtime(
 ) -> Result<(), Box<dyn std::error::Error>> {
     info!("Downloading LiteRT ");
 
-    let runtime_name = target_plarform.runtime_name();
     let runtime_dir = target_plarform.runtime_directory();
-    let runtime_download_url = String::from(LITERT_RUNTIME_DOWNLOAD_URL)
-        + runtime_dir.as_str()
-        + "/"
-        + runtime_name.as_str();
-    let runtime_local_name = out_dir.join(runtime_name);
-    download_file(&runtime_download_url, &runtime_local_name)?;
-    return Ok(());
+    let mut runtime_names = vec![target_plarform.runtime_name()];
+    runtime_names.extend(
+        target_plarform
+            .accelerator_runtime_names()
+            .iter()
+            .map(|name| name.to_string()),
+    );
+
+    for runtime_name in runtime_names {
+        let runtime_download_url = String::from(LITERT_RUNTIME_DOWNLOAD_URL)
+            + runtime_dir.as_str()
+            + "/"
+            + runtime_name.as_str();
+        let runtime_local_name = out_dir.join(runtime_name);
+        download_file(&runtime_download_url, &runtime_local_name)?;
+    }
+    Ok(())
+}
+
+fn patch_macos_cpp_sdk_cmake(sdk_root: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    let cmake_path = sdk_root.join("CMakeLists.txt");
+    let contents = fs::read_to_string(&cmake_path)?;
+    let patched = contents
+        .replace("libLiteRt.so", "libLiteRt.dylib")
+        .replace(
+            "add_executable(run_model_simple\n",
+            "add_executable(run_model_simple EXCLUDE_FROM_ALL\n",
+        );
+    if patched != contents {
+        fs::write(&cmake_path, patched)?;
+    }
+    Ok(())
 }
 
 struct LiteRTSdk {
@@ -187,6 +218,9 @@ fn download_and_build_cpp_sdk(
 
     info!("Downloading prebuilt runtime for SDK to {}", sdk_root.display());
     download_runtime(target_platform, &sdk_root)?;
+    if *target_platform == TargetPlatform::MacosArm64 {
+        patch_macos_cpp_sdk_cmake(&sdk_root)?;
+    }
 
     let build_dir = out_dir.join("litert_cc_sdk_build");
     info!("Building C++ SDK with CMake in {}", build_dir.display());
@@ -249,17 +283,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Build dir {}", litert_sdk.sdk_build_dir.display());
 
     println!("cargo::rustc-link-search=native={}", litert_sdk.sdk_root_dir.display());
+    println!("cargo::rustc-env=LITERT_RUNTIME_LIBRARY_DIR={}", litert_sdk.sdk_root_dir.display());
     println!("cargo::rustc-link-lib=dylib=LiteRt");
+    if target_platform == TargetPlatform::MacosArm64 {
+        println!("cargo::rustc-link-arg=-Wl,-rpath,{}", litert_sdk.sdk_root_dir.display());
+        println!("cargo::rustc-link-lib=framework=Metal");
+        println!("cargo::rustc-link-lib=framework=CoreVideo");
+        println!("cargo::rustc-link-lib=framework=Foundation");
+        println!("cargo::rustc-link-lib=c++");
+    }
     println!("cargo::rustc-link-search=native={}", litert_sdk.sdk_build_dir.display());
     println!("cargo::rustc-link-lib=static=litert_cc_api");
 
+    let local_repo_root = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?)
+        .join("../..")
+        .canonicalize()?;
+
     let bindings = bindgen::Builder::default()
         .header("wrapper.h")
-        // Add the include path so clang can find dependent headers
+        // Prefer the checked-out LiteRT headers so wrapper.h does not mix main headers with
+        // an older downloaded SDK header set.
+        .clang_arg(format!("-I{}", local_repo_root.display()))
         .clang_arg(format!("-I{}", litert_sdk.sdk_root_dir.display()))
         .clang_arg(format!("-I{}", litert_sdk.sdk_root_dir.join("litert").join("c").display()))
         .clang_arg(format!("-I{}", litert_sdk.sdk_build_dir.join("include").display()))
-        .clang_arg("-DLITERT_DISABLE_GPU")
+        .clang_arg("-ULITERT_DISABLE_GPU")
         .layout_tests(false)
         .derive_default(true)
         .generate()

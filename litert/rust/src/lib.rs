@@ -92,3 +92,7 @@ pub use tensor_buffer::ElementType;
 pub use tensor_buffer::TensorBuffer;
 pub use tensor_buffer::TensorBufferRequirements;
 pub use tensor_buffer::TensorBufferType;
+
+pub fn runtime_library_dir() -> Option<&'static str> {
+    option_env!("LITERT_RUNTIME_LIBRARY_DIR")
+}
