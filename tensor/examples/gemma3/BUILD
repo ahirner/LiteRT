@@ -72,6 +72,8 @@ cc_library(
 #     hdrs = ["gemma3_graph.h"],
 #     deps = [
 #         "@com_google_absl//absl/container:flat_hash_map",
+#         "@com_google_absl//absl/log:absl_check",
+#         "@com_google_absl//absl/log:absl_log",
 #         "@com_google_absl//absl/strings",
 #         "//tensor",
 #         "//tensor:arithmetic",
@@ -129,6 +131,27 @@ cc_library(
 )
 
 cc_library(
+    name = "tflite_loader",
+    srcs = ["tflite_loader.cc"],
+    hdrs = ["tflite_loader.h"],
+    deps = [
+        "//tensor",
+        "//tensor:buffer",
+        "//tensor:datatypes",
+        "//tensor/utils:macros",
+        "//tflite:model_builder",
+        "//tflite/core:model_builder",
+        "//tflite/schema:schema_fbs",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/log:absl_log",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:string_view",
+    ],
+)
+
+cc_library(
     name = "gemma3",
     hdrs = ["gemma3.h"],
     deps = [
@@ -157,6 +180,7 @@ cc_library(
 #     deps = [
 #         ":gemma3_graph",
 #         ":safetensor_loader",
+#         ":tflite_loader",
 #         "@com_google_absl//absl/log:absl_log",
 #         "@com_google_absl//absl/status",
 #         "@com_google_absl//absl/status:statusor",
@@ -208,6 +232,51 @@ cc_binary(
 )
 
 # copybara:uncomment_begin(google_only)
+# cc_binary(
+#     name = "tflite_fb_main",
+#     srcs = ["tflite_fb_main.cc"],
+#     copts = select({
+#         "//litert:android": [],
+#         "//conditions:default": ["-DGOOGLE_COMMANDLINEFLAGS_FULL_API=1"],
+#     }) + commandline_flag_copts(),
+#     data = litert_gpu_accelerator_prebuilts(),
+#     linkopts = litert_android_linkopts(),
+#     deps = [
+#         ":config",
+#         ":gemma3",
+#         ":graph_helpers",
+#         ":tflite_loader",
+#         ":tokenizer",
+#         ":util",
+#         "//base",
+#         "@com_google_absl//absl/cleanup",
+#         "@com_google_absl//absl/container:flat_hash_map",
+#         "@com_google_absl//absl/flags:flag",
+#         "@com_google_absl//absl/flags:parse",
+#         "@com_google_absl//absl/log:absl_log",
+#         "@com_google_absl//absl/status",
+#         "@com_google_absl//absl/status:statusor",
+#         "@com_google_absl//absl/strings",
+#         "@com_google_absl//absl/time",
+#         "@com_google_absl//absl/types:span",
+#         "//third_party/gloop/base:init_google",
+#         "//litert/cc:litert_api_with_dynamic_runtime",
+#         "//litert/cc:litert_common",
+#         "//litert/cc:litert_environment",
+#         "//litert/cc:litert_options",
+#         "//litert/cc/options:litert_gpu_options",
+#         "//tensor",
+#         "//tensor:arithmetic",
+#         "//tensor:arithmetic_graph",
+#         "//tensor:buffer",
+#         "//tensor:datatypes",
+#         "//tensor/backends/tflite:arithmetic_tflite",
+#         "//tensor/backends/tflite:tflite_flatbuffer_conversion",
+#         "//tensor/runners/litert:litert_dynamic_runner",
+#         "//tensor/utils:macros",
+#     ] + litert_gpu_accelerator_deps(),
+# )
+#
 # cc_binary(
 #     name = "xnnpack_main",
 #     srcs = ["xnnpack_main.cc"],
@@ -301,6 +370,46 @@ cc_binary(
 #         "//tensor:buffer",
 #         "//tensor:datatypes",
 #         "//tensor/backends/ml_drift:arithmetic_ml_drift",
+#         "//tensor/internal:graph",
+#         "//tensor/runners/ml_drift:ml_drift_cl_model_runner",
+#         "//tensor/utils:macros",
+#     ],
+# )
+#
+# cc_binary(
+#     name = "mldrift_main",
+#     srcs = ["mldrift_main.cc"],
+#     copts = [
+#         "-DGOOGLE_COMMANDLINEFLAGS_FULL_API=1",
+#     ],
+#     deps = [
+#         ":benchmark_utils",
+#         ":gemma3_graph",
+#         ":model_config",
+#         ":tflite_loader",
+#         ":tokenizer",
+#         "@com_google_absl//absl/algorithm:container",
+#         "@com_google_absl//absl/container:flat_hash_map",
+#         "@com_google_absl//absl/flags:flag",
+#         "@com_google_absl//absl/flags:parse",
+#         "@com_google_absl//absl/log:absl_check",
+#         "@com_google_absl//absl/log:absl_log",
+#         "@com_google_absl//absl/status",
+#         "@com_google_absl//absl/status:statusor",
+#         "@com_google_absl//absl/strings",
+#         "@com_google_absl//absl/strings:string_view",
+#         "@com_google_absl//absl/time",
+#         "@com_google_absl//absl/types:span",
+#         "@ml_drift//ml_drift/cl:environment",
+#         "@ml_drift//ml_drift/cl:opencl_wrapper",
+#         "@ml_drift//ml_drift/common:gpu_model",
+#         "@ml_drift//ml_drift/common:precision",
+#         "//tensor",
+#         "//tensor:buffer",
+#         "//tensor:datatypes",
+#         "//tensor/backends/ml_drift:arithmetic_ml_drift",
+#         "//tensor/backends/ml_drift:ml_drift_buffer",
+#         "//tensor/backends/ml_drift:ml_drift_helpers",
 #         "//tensor/internal:graph",
 #         "//tensor/runners/ml_drift:ml_drift_cl_model_runner",
 #         "//tensor/utils:macros",
