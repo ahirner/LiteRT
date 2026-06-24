@@ -219,14 +219,8 @@ fn download_and_build_cpp_sdk(
     Ok(LiteRTSdk::new(sdk_root, build_dir))
 }
 
-fn dump_all_env_vars() {
-    for (key, value) in env::vars() {
-        info!("Environment: {}: {}", key, value);
-    }
-}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    dump_all_env_vars();
     println!("cargo::rustc-check-cfg=cfg(bazel_bindgen, cargo_bindgen, docsrs)");
     // Check if we are currently generating documentation
     let is_doc_gen = env::var(CARGO_DOCS_RS).is_ok();
