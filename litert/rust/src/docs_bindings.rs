@@ -197,11 +197,31 @@ pub const LiteRtTensorBufferType_kLiteRtTensorBufferTypeGlTexture: LiteRtTensorB
 
 pub const LiteRtTensorBufferType_kLiteRtTensorBufferTypeOpenClBuffer: LiteRtTensorBufferType = 10;
 
+pub const LiteRtTensorBufferType_kLiteRtTensorBufferTypeOpenClBufferFp16: LiteRtTensorBufferType = 11;
+
 pub const LiteRtTensorBufferType_kLiteRtTensorBufferTypeOpenClTexture: LiteRtTensorBufferType = 12;
+
+pub const LiteRtTensorBufferType_kLiteRtTensorBufferTypeOpenClTextureFp16: LiteRtTensorBufferType = 13;
+
+pub const LiteRtTensorBufferType_kLiteRtTensorBufferTypeOpenClBufferPacked: LiteRtTensorBufferType = 14;
+
+pub const LiteRtTensorBufferType_kLiteRtTensorBufferTypeOpenClImageBuffer: LiteRtTensorBufferType = 15;
+
+pub const LiteRtTensorBufferType_kLiteRtTensorBufferTypeOpenClImageBufferFp16: LiteRtTensorBufferType = 16;
 
 pub const LiteRtTensorBufferType_kLiteRtTensorBufferTypeWebGpuBuffer: LiteRtTensorBufferType = 20;
 
+pub const LiteRtTensorBufferType_kLiteRtTensorBufferTypeWebGpuBufferFp16: LiteRtTensorBufferType = 21;
+
 pub const LiteRtTensorBufferType_kLiteRtTensorBufferTypeWebGpuTexture: LiteRtTensorBufferType = 22;
+
+pub const LiteRtTensorBufferType_kLiteRtTensorBufferTypeWebGpuTextureFp16: LiteRtTensorBufferType = 23;
+
+pub const LiteRtTensorBufferType_kLiteRtTensorBufferTypeWebGpuImageBuffer: LiteRtTensorBufferType = 24;
+
+pub const LiteRtTensorBufferType_kLiteRtTensorBufferTypeWebGpuImageBufferFp16: LiteRtTensorBufferType = 25;
+
+pub const LiteRtTensorBufferType_kLiteRtTensorBufferTypeWebGpuBufferPacked: LiteRtTensorBufferType = 26;
 
 pub const LiteRtTensorBufferType_kLiteRtTensorBufferTypeMetalBuffer: LiteRtTensorBufferType = 30;
 
@@ -215,7 +235,23 @@ pub const LiteRtTensorBufferType_kLiteRtTensorBufferTypeMetalBufferPacked: LiteR
 
 pub const LiteRtTensorBufferType_kLiteRtTensorBufferTypeVulkanBuffer: LiteRtTensorBufferType = 40;
 
+pub const LiteRtTensorBufferType_kLiteRtTensorBufferTypeVulkanBufferFp16: LiteRtTensorBufferType = 41;
+
 pub const LiteRtTensorBufferType_kLiteRtTensorBufferTypeVulkanTexture: LiteRtTensorBufferType = 42;
+
+pub const LiteRtTensorBufferType_kLiteRtTensorBufferTypeVulkanTextureFp16: LiteRtTensorBufferType = 43;
+
+pub const LiteRtTensorBufferType_kLiteRtTensorBufferTypeVulkanImageBuffer: LiteRtTensorBufferType = 44;
+
+pub const LiteRtTensorBufferType_kLiteRtTensorBufferTypeVulkanImageBufferFp16: LiteRtTensorBufferType = 45;
+
+pub const LiteRtTensorBufferType_kLiteRtTensorBufferTypeVulkanBufferPacked: LiteRtTensorBufferType = 46;
+
+pub const LiteRtTensorBufferType_kLiteRtTensorBufferTypeUserCustomBuffer: LiteRtTensorBufferType = 100;
+
+pub const LiteRtTensorBufferType_kLiteRtTensorBufferTypeOpenVINOTensorBuffer: LiteRtTensorBufferType = 100;
+
+pub const LiteRtTensorBufferType_kLiteRtTensorBufferTypeUserCustomBufferEnd: LiteRtTensorBufferType = 199;
 
 pub const LiteRtEnvOptionTag_kLiteRtEnvOptionTagCompilerPluginLibraryDir: LiteRtEnvOptionTag = 0;
 
