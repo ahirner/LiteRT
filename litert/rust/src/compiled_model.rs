@@ -14,6 +14,8 @@
 
 //! The compiled model is the result of compiling a model with specific options.
 //! It can be used to run inference on the model.
+use std::ffi::{c_void, CString};
+
 use crate::bindings::*;
 use crate::call_check_status;
 use crate::environment::Environment;
@@ -81,6 +83,53 @@ impl Options {
             ErrorCause::SetOptionsHardwareAccelerators
         );
         Ok(options)
+    }
+
+    /// Adds accelerator-specific opaque options.
+    pub fn add_opaque_options(
+        self,
+        payload_identifier: &str,
+        payload: &str,
+    ) -> Result<Self, Error> {
+        let payload_identifier = c_string(payload_identifier)?;
+        let payload = c_string(payload)?;
+        let payload_ptr = payload.into_raw().cast::<c_void>();
+        let mut opaque_options: LiteRtOpaqueOptions = std::ptr::null_mut();
+        let status = unsafe {
+            LiteRtCreateOpaqueOptions(
+                payload_identifier.as_ptr(),
+                payload_ptr,
+                Some(destroy_c_string_payload),
+                &mut opaque_options,
+            )
+        };
+        if status != LiteRtStatus_kLiteRtStatusOk {
+            unsafe { drop(CString::from_raw(payload_ptr.cast())) };
+            return Err(Error::new(ErrorCause::CreateOptions, status));
+        }
+
+        let status = unsafe { LiteRtAddOpaqueOptions(self.raw_options, opaque_options) };
+        if status != LiteRtStatus_kLiteRtStatusOk {
+            unsafe { LiteRtDestroyOpaqueOptions(opaque_options) };
+            return Err(Error::new(ErrorCause::CreateOptions, status));
+        }
+
+        Ok(self)
+    }
+}
+
+fn c_string(value: &str) -> Result<CString, Error> {
+    CString::new(value).map_err(|_| {
+        Error::new(
+            ErrorCause::InvalidStringEncoding,
+            LiteRtStatus_kLiteRtStatusErrorInvalidArgument,
+        )
+    })
+}
+
+unsafe extern "C" fn destroy_c_string_payload(payload: *mut c_void) {
+    if !payload.is_null() {
+        unsafe { drop(CString::from_raw(payload.cast())) };
     }
 }
 
