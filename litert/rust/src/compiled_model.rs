@@ -14,12 +14,14 @@
 
 //! The compiled model is the result of compiling a model with specific options.
 //! It can be used to run inference on the model.
+use std::ffi::{c_void, CString};
+
 use crate::bindings::*;
 use crate::call_check_status;
 use crate::environment::Environment;
 use crate::error::{Error, ErrorCause};
 use crate::model::{Model, Tensor};
-use crate::tensor_buffer::{TensorBuffer, TensorBufferRequirements};
+use crate::tensor_buffer::{TensorBuffer, TensorBufferRequirements, TensorBufferType};
 
 /// Options for compiling a model.
 pub struct Options {
@@ -62,7 +64,15 @@ impl Options {
 
     /// Creates a new set of options with the specified hardware accelerator.
     pub fn create_with_accelerator(accelerator: LiteRtHwAccelerator) -> Result<Self, Error> {
-        let accelerator_c_enum = accelerator.to_c_enum();
+        Self::create_with_accelerators(&[accelerator])
+    }
+
+    /// Creates a new set of options with the specified hardware accelerators.
+    pub fn create_with_accelerators(accelerators: &[LiteRtHwAccelerator]) -> Result<Self, Error> {
+        let accelerator_c_enum = accelerators.iter().fold(
+            LiteRtHwAccelerators_kLiteRtHwAcceleratorNone,
+            |set, accelerator| set | accelerator.to_c_enum(),
+        );
         let options = Self::default()?;
         call_check_status!(
             // SAFETY: options.raw_options is valid because it's created by calling the default() function.
@@ -73,6 +83,53 @@ impl Options {
             ErrorCause::SetOptionsHardwareAccelerators
         );
         Ok(options)
+    }
+
+    /// Adds accelerator-specific opaque options.
+    pub fn add_opaque_options(
+        self,
+        payload_identifier: &str,
+        payload: &str,
+    ) -> Result<Self, Error> {
+        let payload_identifier = c_string(payload_identifier)?;
+        let payload = c_string(payload)?;
+        let payload_ptr = payload.into_raw().cast::<c_void>();
+        let mut opaque_options: LiteRtOpaqueOptions = std::ptr::null_mut();
+        let status = unsafe {
+            LiteRtCreateOpaqueOptions(
+                payload_identifier.as_ptr(),
+                payload_ptr,
+                Some(destroy_c_string_payload),
+                &mut opaque_options,
+            )
+        };
+        if status != LiteRtStatus_kLiteRtStatusOk {
+            unsafe { drop(CString::from_raw(payload_ptr.cast())) };
+            return Err(Error::new(ErrorCause::CreateOptions, status));
+        }
+
+        let status = unsafe { LiteRtAddOpaqueOptions(self.raw_options, opaque_options) };
+        if status != LiteRtStatus_kLiteRtStatusOk {
+            unsafe { LiteRtDestroyOpaqueOptions(opaque_options) };
+            return Err(Error::new(ErrorCause::CreateOptions, status));
+        }
+
+        Ok(self)
+    }
+}
+
+fn c_string(value: &str) -> Result<CString, Error> {
+    CString::new(value).map_err(|_| {
+        Error::new(
+            ErrorCause::InvalidStringEncoding,
+            LiteRtStatus_kLiteRtStatusErrorInvalidArgument,
+        )
+    })
+}
+
+unsafe extern "C" fn destroy_c_string_payload(payload: *mut c_void) {
+    if !payload.is_null() {
+        unsafe { drop(CString::from_raw(payload.cast())) };
     }
 }
 
@@ -164,14 +221,39 @@ impl CompiledModel {
         model: &Model,
         signature_index: LiteRtParamIndex,
     ) -> Result<Vec<TensorBuffer<'_>>, Error> {
+        self.create_input_tensor_buffers_impl(environment, model, signature_index, None)
+    }
+
+    /// Creates input tensor buffers of the requested backing type.
+    pub fn create_input_tensor_buffers_with_type(
+        &self,
+        environment: &Environment,
+        model: &Model,
+        signature_index: LiteRtParamIndex,
+        buffer_type: TensorBufferType,
+    ) -> Result<Vec<TensorBuffer<'_>>, Error> {
+        self.create_input_tensor_buffers_impl(environment, model, signature_index, Some(buffer_type))
+    }
+
+    fn create_input_tensor_buffers_impl(
+        &self,
+        environment: &Environment,
+        model: &Model,
+        signature_index: LiteRtParamIndex,
+        buffer_type: Option<TensorBufferType>,
+    ) -> Result<Vec<TensorBuffer<'_>>, Error> {
         let signature = model.signature(signature_index)?;
         let subgraph = signature.subgraph()?;
         let mut result = Vec::with_capacity(signature.num_inputs()?);
         for (i, input_name) in signature.input_names()?.enumerate() {
             let input_requirements = self.input_buffer_requirements(signature_index, i)?;
             let tensor = subgraph.input_tensor_by_name(input_name?)?;
-            let buffer =
-                CompiledModel::create_buffer_impl(environment, &input_requirements, &tensor)?;
+            let buffer = CompiledModel::create_buffer_impl(
+                environment,
+                &input_requirements,
+                &tensor,
+                buffer_type.as_ref(),
+            )?;
             result.push(buffer);
         }
         Ok(result)
@@ -184,14 +266,39 @@ impl CompiledModel {
         model: &Model,
         signature_index: LiteRtParamIndex,
     ) -> Result<Vec<TensorBuffer<'_>>, Error> {
+        self.create_output_tensor_buffers_impl(environment, model, signature_index, None)
+    }
+
+    /// Creates output tensor buffers of the requested backing type.
+    pub fn create_output_tensor_buffers_with_type(
+        &self,
+        environment: &Environment,
+        model: &Model,
+        signature_index: LiteRtParamIndex,
+        buffer_type: TensorBufferType,
+    ) -> Result<Vec<TensorBuffer<'_>>, Error> {
+        self.create_output_tensor_buffers_impl(environment, model, signature_index, Some(buffer_type))
+    }
+
+    fn create_output_tensor_buffers_impl(
+        &self,
+        environment: &Environment,
+        model: &Model,
+        signature_index: LiteRtParamIndex,
+        buffer_type: Option<TensorBufferType>,
+    ) -> Result<Vec<TensorBuffer<'_>>, Error> {
         let signature = model.signature(signature_index)?;
         let subgraph = signature.subgraph()?;
         let mut result = Vec::with_capacity(signature.num_outputs()?);
         for (i, output_name) in signature.output_names()?.enumerate() {
             let output_requirements = self.output_buffer_requirements(signature_index, i)?;
             let tensor = subgraph.output_tensor_by_name(output_name?)?;
-            let buffer =
-                CompiledModel::create_buffer_impl(environment, &output_requirements, &tensor)?;
+            let buffer = CompiledModel::create_buffer_impl(
+                environment,
+                &output_requirements,
+                &tensor,
+                buffer_type.as_ref(),
+            )?;
             result.push(buffer);
         }
         Ok(result)
@@ -201,14 +308,29 @@ impl CompiledModel {
         environment: &Environment,
         requirements: &TensorBufferRequirements,
         tensor: &Tensor,
+        requested_type: Option<&TensorBufferType>,
     ) -> Result<TensorBuffer<'a>, Error> {
         let supported_types = requirements.supported_types()?;
-        // For simplicity we just pick the first supported tensor buffer type.
-        let Some(buffer_type) = supported_types.get(0) else {
-            return Err(Error::new(
-                ErrorCause::InputDoesntSupportAnyTensorBufferTypes,
-                LiteRtStatus_kLiteRtStatusErrorInvalidArgument,
-            ));
+        let buffer_type = if let Some(requested_type) = requested_type {
+            if !supported_types.contains(requested_type) {
+                return Err(Error::new(
+                    ErrorCause::InputDoesntSupportAnyTensorBufferTypes,
+                    LiteRtStatus_kLiteRtStatusErrorInvalidArgument,
+                ));
+            }
+            requested_type
+        } else {
+            let Some(buffer_type) = supported_types
+                .iter()
+                .find(|buffer_type| matches!(buffer_type, TensorBufferType::HostMemory))
+                .or_else(|| supported_types.first())
+            else {
+                return Err(Error::new(
+                    ErrorCause::InputDoesntSupportAnyTensorBufferTypes,
+                    LiteRtStatus_kLiteRtStatusErrorInvalidArgument,
+                ));
+            };
+            buffer_type
         };
         let tensor_type = tensor.ranked_tensor_type()?;
         let element_type = tensor.element_type()?;

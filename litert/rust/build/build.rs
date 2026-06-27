@@ -204,7 +204,13 @@ fn download_and_build_cpp_sdk(
         return Err(format!("CMake configure failed with status: {}", status).into());
     }
 
-    let status = Command::new("cmake").arg("--build").arg(&build_dir).arg("-j").status()?;
+    let status = Command::new("cmake")
+        .arg("--build")
+        .arg(&build_dir)
+        .arg("--target")
+        .arg("litert_cc_api")
+        .arg("-j")
+        .status()?;
 
     if !status.success() {
         return Err(format!("CMake build failed with status: {}", status).into());
@@ -213,14 +219,8 @@ fn download_and_build_cpp_sdk(
     Ok(LiteRTSdk::new(sdk_root, build_dir))
 }
 
-fn dump_all_env_vars() {
-    for (key, value) in env::vars() {
-        info!("Environment: {}: {}", key, value);
-    }
-}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    dump_all_env_vars();
     println!("cargo::rustc-check-cfg=cfg(bazel_bindgen, cargo_bindgen, docsrs)");
     // Check if we are currently generating documentation
     let is_doc_gen = env::var(CARGO_DOCS_RS).is_ok();
@@ -253,9 +253,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo::rustc-link-search=native={}", litert_sdk.sdk_build_dir.display());
     println!("cargo::rustc-link-lib=static=litert_cc_api");
 
+    let local_repo_root = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?)
+        .join("../..")
+        .canonicalize()?;
+
     let bindings = bindgen::Builder::default()
         .header("wrapper.h")
-        // Add the include path so clang can find dependent headers
+        // Prefer the checked-out LiteRT headers so wrapper.h does not mix main headers with
+        // an older downloaded SDK header set.
+        .clang_arg(format!("-I{}", local_repo_root.display()))
         .clang_arg(format!("-I{}", litert_sdk.sdk_root_dir.display()))
         .clang_arg(format!("-I{}", litert_sdk.sdk_root_dir.join("litert").join("c").display()))
         .clang_arg(format!("-I{}", litert_sdk.sdk_build_dir.join("include").display()))
