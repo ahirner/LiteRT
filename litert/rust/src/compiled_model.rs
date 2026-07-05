@@ -21,7 +21,7 @@ use crate::call_check_status;
 use crate::environment::Environment;
 use crate::error::{Error, ErrorCause};
 use crate::model::{Model, Tensor};
-use crate::tensor_buffer::{TensorBuffer, TensorBufferRequirements, TensorBufferType};
+use crate::tensor_buffer::{ElementType, TensorBuffer, TensorBufferRequirements, TensorBufferType};
 
 /// Options for compiling a model.
 pub struct Options {
@@ -241,13 +241,15 @@ impl CompiledModel {
         let signature = model.signature(signature_index)?;
         let subgraph = signature.subgraph()?;
         let mut result = Vec::with_capacity(signature.num_inputs()?);
-        for (i, input_name) in signature.input_names()?.enumerate() {
+        for i in 0..signature.num_inputs()? {
             let input_requirements = self.input_buffer_requirements(signature_index, i)?;
-            let tensor = subgraph.input_tensor_by_name(input_name?)?;
+            let tensor = subgraph.input_tensor(i)?;
+            let tensor_type = self.input_tensor_type(signature_index, i, &tensor)?;
             let buffer = CompiledModel::create_buffer_impl(
                 environment,
                 &input_requirements,
-                &tensor,
+                &tensor_type,
+                tensor.element_type()?,
                 buffer_type.as_ref(),
             )?;
             result.push(buffer);
@@ -285,14 +287,19 @@ impl CompiledModel {
     ) -> Result<Vec<TensorBuffer<'_>>, Error> {
         let signature = model.signature(signature_index)?;
         let subgraph = signature.subgraph()?;
-        let mut result = Vec::with_capacity(signature.num_outputs()?);
-        for (i, output_name) in signature.output_names()?.enumerate() {
+        let output_count = signature.num_outputs()?;
+        let output_layouts = self.output_tensor_layouts(signature_index, output_count)?;
+        let mut result = Vec::with_capacity(output_count);
+        for i in 0..output_count {
             let output_requirements = self.output_buffer_requirements(signature_index, i)?;
-            let tensor = subgraph.output_tensor_by_name(output_name?)?;
+            let tensor = subgraph.output_tensor(i)?;
+            let mut tensor_type = tensor.ranked_tensor_type()?;
+            tensor_type.layout = output_layouts[i];
             let buffer = CompiledModel::create_buffer_impl(
                 environment,
                 &output_requirements,
-                &tensor,
+                &tensor_type,
+                tensor.element_type()?,
                 buffer_type.as_ref(),
             )?;
             result.push(buffer);
@@ -300,10 +307,56 @@ impl CompiledModel {
         Ok(result)
     }
 
+    fn input_tensor_type(
+        &self,
+        signature_index: LiteRtParamIndex,
+        input_index: LiteRtParamIndex,
+        tensor: &Tensor,
+    ) -> Result<LiteRtRankedTensorType, Error> {
+        let mut tensor_type = tensor.ranked_tensor_type()?;
+        call_check_status!(
+            // SAFETY: self.raw_compiled_model is valid because it's created by calling the create() function.
+            unsafe {
+                LiteRtGetCompiledModelInputTensorLayout(
+                    self.raw_compiled_model,
+                    signature_index,
+                    input_index,
+                    &mut tensor_type.layout,
+                )
+            },
+            ErrorCause::GetCompiledModelInputTensorLayout
+        );
+        Ok(tensor_type)
+    }
+
+    fn output_tensor_layouts(
+        &self,
+        signature_index: LiteRtParamIndex,
+        output_count: LiteRtParamIndex,
+    ) -> Result<Vec<LiteRtLayout>, Error> {
+        let mut output_layouts = vec![LiteRtLayout::default(); output_count];
+        call_check_status!(
+            // SAFETY: self.raw_compiled_model is valid because it's created by calling the create() function.
+            // output_layouts points to output_count valid LiteRtLayout values.
+            unsafe {
+                LiteRtGetCompiledModelOutputTensorLayouts(
+                    self.raw_compiled_model,
+                    signature_index,
+                    output_layouts.len(),
+                    output_layouts.as_mut_ptr(),
+                    false,
+                )
+            },
+            ErrorCause::GetCompiledModelOutputTensorLayouts
+        );
+        Ok(output_layouts)
+    }
+
     fn create_buffer_impl<'a>(
         environment: &Environment,
         requirements: &TensorBufferRequirements,
-        tensor: &Tensor,
+        tensor_type: &LiteRtRankedTensorType,
+        element_type: ElementType,
         requested_type: Option<&TensorBufferType>,
     ) -> Result<TensorBuffer<'a>, Error> {
         let supported_types = requirements.supported_types()?;
@@ -328,10 +381,44 @@ impl CompiledModel {
             };
             buffer_type
         };
-        let tensor_type = tensor.ranked_tensor_type()?;
-        let element_type = tensor.element_type()?;
         let buffer_size = requirements.buffer_size()?;
-        TensorBuffer::new(environment, &tensor_type, buffer_type, buffer_size, element_type)
+        TensorBuffer::new(
+            environment,
+            tensor_type,
+            buffer_type,
+            buffer_size,
+            element_type,
+        )
+    }
+
+    /// Resizes an input tensor for a dynamic input shape.
+    pub fn resize_input_tensor(
+        &self,
+        signature_index: LiteRtParamIndex,
+        input_index: LiteRtParamIndex,
+        dims: &[i32],
+        strict: bool,
+    ) -> Result<(), Error> {
+        let resize = if strict {
+            LiteRtCompiledModelResizeInputTensor
+        } else {
+            LiteRtCompiledModelResizeInputTensorNonStrict
+        };
+        call_check_status!(
+            // SAFETY: self.raw_compiled_model is valid because it's created by calling the create() function.
+            // dims.as_ptr() is valid for dims.len() elements.
+            unsafe {
+                resize(
+                    self.raw_compiled_model,
+                    signature_index,
+                    input_index,
+                    dims.as_ptr(),
+                    dims.len(),
+                )
+            },
+            ErrorCause::ResizeInputTensor
+        );
+        Ok(())
     }
 
     /// Runs inference on the compiled model.

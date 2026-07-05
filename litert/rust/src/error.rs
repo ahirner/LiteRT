@@ -28,8 +28,11 @@ pub enum ErrorCause {
     CreateCompiledModel,
     GetCompiledModelInputBufferRequirements,
     GetCompiledModelOutputBufferRequirements,
+    GetCompiledModelInputTensorLayout,
+    GetCompiledModelOutputTensorLayouts,
     InputDoesntSupportAnyTensorBufferTypes,
     RunCompiledModel,
+    ResizeInputTensor,
     // environment
     NotSupportedLiteRtAnyType,
     CreateEnvironment,
