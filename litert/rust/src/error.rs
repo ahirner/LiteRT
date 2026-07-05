@@ -60,6 +60,7 @@ pub enum ErrorCause {
     GetNumModelSubgraphs,
     GetNumModelSignatures,
     GetModelSignature,
+    GetModelMetadata,
     //tensor_buffer
     GetTensorBufferRequirementsBufferSize,
     GetNumTensorBufferRequirementsSupportedBufferTypes,
