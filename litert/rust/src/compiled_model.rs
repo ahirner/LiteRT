@@ -352,6 +352,21 @@ impl CompiledModel {
         Ok(output_layouts)
     }
 
+    /// Returns the current runtime shapes of a signature's output tensors.
+    pub fn output_tensor_shapes(
+        &self,
+        signature_index: LiteRtParamIndex,
+        output_count: LiteRtParamIndex,
+    ) -> Result<Vec<Vec<i32>>, Error> {
+        self.output_tensor_layouts(signature_index, output_count)
+            .map(|layouts| {
+                layouts
+                    .into_iter()
+                    .map(|layout| layout.dimensions[..layout.rank() as usize].to_vec())
+                    .collect()
+            })
+    }
+
     fn create_buffer_impl<'a>(
         environment: &Environment,
         requirements: &TensorBufferRequirements,
