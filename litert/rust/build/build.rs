@@ -388,9 +388,11 @@ fn generate_bindings_from_source() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo::rerun-if-changed=../c");
     println!("cargo::rerun-if-changed=../build_common/config/build_config_cpu_only.h");
     let out_dir = PathBuf::from(env::var(OUT_DIR_ENV_VAR)?);
-    let repo_root = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?)
-        .join("../..")
-        .canonicalize()?;
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?);
+    let repo_root = manifest_dir
+        .parent()
+        .and_then(|path| path.parent())
+        .ok_or_else(|| std::io::Error::other("LiteRT repository root is unavailable"))?;
     let generated_include_dir = out_dir.join("source_include");
     let build_config_path = generated_include_dir.join("litert/build_common/build_config.h");
     fs::create_dir_all(build_config_path.parent().unwrap())?;
