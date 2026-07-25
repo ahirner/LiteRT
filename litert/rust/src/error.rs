@@ -36,6 +36,8 @@ pub enum ErrorCause {
     // environment
     NotSupportedLiteRtAnyType,
     CreateEnvironment,
+    GetEnvironmentOptions,
+    GetEnvironmentOptionsValue,
     // model
     GetSignatureKey,
     GetSignatureSubgraph,

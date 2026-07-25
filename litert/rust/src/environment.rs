@@ -200,6 +200,35 @@ impl Environment {
         );
         Ok(Self { raw_environment: raw_environment_ptr, cstring_storage: builder.cstring_storage })
     }
+
+    /// Returns an integer environment option, or `None` when the tag is absent.
+    pub fn integer_option(&self, tag: OptionTag) -> Result<Option<i64>, Error> {
+        let mut options: LiteRtEnvironmentOptions = std::ptr::null_mut();
+        call_check_status!(
+            // SAFETY: self.raw_environment remains valid for the lifetime of self.
+            unsafe { LiteRtGetEnvironmentOptions(self.raw_environment, &mut options) },
+            ErrorCause::GetEnvironmentOptions
+        );
+
+        let mut value = LiteRtAny::default();
+        let status =
+            unsafe { LiteRtGetEnvironmentOptionsValue(options, tag.to_c_enum(), &mut value) };
+        if status == LiteRtStatus_kLiteRtStatusErrorNotFound {
+            return Ok(None);
+        }
+        if status != LiteRtStatus_kLiteRtStatusOk {
+            return Err(Error::new(ErrorCause::GetEnvironmentOptionsValue, status));
+        }
+        if value.type_ != LiteRtAnyType_kLiteRtAnyTypeInt {
+            return Err(Error::new(
+                ErrorCause::NotSupportedLiteRtAnyType,
+                LiteRtStatus_kLiteRtStatusErrorInvalidArgument,
+            ));
+        }
+
+        // SAFETY: LiteRtAnyType above identifies the active union member.
+        Ok(Some(unsafe { value.__bindgen_anon_1.int_value }))
+    }
 }
 
 impl Drop for Environment {
