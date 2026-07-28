@@ -387,6 +387,7 @@ fn copy_wrapper_h(out_dir: &Path) -> Result<PathBuf, Box<dyn std::error::Error>>
 fn generate_bindings_from_source() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo::rerun-if-changed=../c");
     println!("cargo::rerun-if-changed=../build_common/config/build_config_cpu_only.h");
+    println!("cargo::rustc-link-lib=dylib=LiteRt");
     let out_dir = PathBuf::from(env::var(OUT_DIR_ENV_VAR)?);
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?);
     let repo_root = manifest_dir

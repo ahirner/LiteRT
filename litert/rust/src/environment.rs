@@ -22,7 +22,6 @@ use std::ffi::{c_void, CString};
 pub enum OptionTag {
     CompilerPluginLibraryDir,
     DispatchLibraryDir,
-    RuntimeLibraryDir,
     ClDeviceId,
     ClPlatformId,
     ClContext,
@@ -43,7 +42,6 @@ impl OptionTag {
                 LiteRtEnvOptionTag_kLiteRtEnvOptionTagCompilerPluginLibraryDir
             }
             Self::DispatchLibraryDir => LiteRtEnvOptionTag_kLiteRtEnvOptionTagDispatchLibraryDir,
-            Self::RuntimeLibraryDir => LiteRtEnvOptionTag_kLiteRtEnvOptionTagRuntimeLibraryDir,
             Self::ClDeviceId => LiteRtEnvOptionTag_kLiteRtEnvOptionTagOpenClDeviceId,
             Self::ClPlatformId => LiteRtEnvOptionTag_kLiteRtEnvOptionTagOpenClPlatformId,
             Self::ClContext => LiteRtEnvOptionTag_kLiteRtEnvOptionTagOpenClContext,
@@ -167,14 +165,6 @@ impl EnvironmentBuilder {
                 __bindgen_anon_1: LiteRtAny__bindgen_ty_1 {
                     // SAFETY: unwrap is safe here, because we checked that type_id is of<*mut c_void>.
                     ptr_value: *any_value.downcast_ref::<*mut c_void>().unwrap() as *const c_void,
-                },
-            })
-        } else if TypeId::of::<*const c_void>() == type_id {
-            Ok(LiteRtAny {
-                type_: LiteRtAnyType_kLiteRtAnyTypeVoidPtr,
-                __bindgen_anon_1: LiteRtAny__bindgen_ty_1 {
-                    // SAFETY: unwrap is safe here, because we checked that type_id is of<*const c_void>.
-                    ptr_value: *any_value.downcast_ref::<*const c_void>().unwrap(),
                 },
             })
         } else {
