@@ -14,12 +14,14 @@
 
 //! The compiled model is the result of compiling a model with specific options.
 //! It can be used to run inference on the model.
+use std::ffi::{c_void, CString};
+
 use crate::bindings::*;
 use crate::call_check_status;
 use crate::environment::Environment;
 use crate::error::{Error, ErrorCause};
 use crate::model::{Model, Tensor};
-use crate::tensor_buffer::{TensorBuffer, TensorBufferRequirements};
+use crate::tensor_buffer::{ElementType, TensorBuffer, TensorBufferRequirements, TensorBufferType};
 
 /// Options for compiling a model.
 pub struct Options {
@@ -60,7 +62,15 @@ impl Options {
 
     /// Creates a new set of options with the specified hardware accelerator.
     pub fn create_with_accelerator(accelerator: LiteRtHwAccelerator) -> Result<Self, Error> {
-        let accelerator_c_enum = accelerator.to_c_enum();
+        Self::create_with_accelerators(&[accelerator])
+    }
+
+    /// Creates a new set of options with the specified hardware accelerators.
+    pub fn create_with_accelerators(accelerators: &[LiteRtHwAccelerator]) -> Result<Self, Error> {
+        let accelerator_c_enum = accelerators.iter().fold(
+            LiteRtHwAccelerators_kLiteRtHwAcceleratorNone,
+            |set, accelerator| set | accelerator.to_c_enum(),
+        );
         let options = Self::default()?;
         call_check_status!(
             // SAFETY: options.raw_options is valid because it's created by calling the default() function.
@@ -71,6 +81,53 @@ impl Options {
             ErrorCause::SetOptionsHardwareAccelerators
         );
         Ok(options)
+    }
+
+    /// Adds accelerator-specific opaque options.
+    pub fn add_opaque_options(
+        self,
+        payload_identifier: &str,
+        payload: &str,
+    ) -> Result<Self, Error> {
+        let payload_identifier = c_string(payload_identifier)?;
+        let payload = c_string(payload)?;
+        let payload_ptr = payload.into_raw().cast::<c_void>();
+        let mut opaque_options: LiteRtOpaqueOptions = std::ptr::null_mut();
+        let status = unsafe {
+            LiteRtCreateOpaqueOptions(
+                payload_identifier.as_ptr(),
+                payload_ptr,
+                Some(destroy_c_string_payload),
+                &mut opaque_options,
+            )
+        };
+        if status != LiteRtStatus_kLiteRtStatusOk {
+            unsafe { drop(CString::from_raw(payload_ptr.cast())) };
+            return Err(Error::new(ErrorCause::CreateOptions, status));
+        }
+
+        let status = unsafe { LiteRtAddOpaqueOptions(self.raw_options, opaque_options) };
+        if status != LiteRtStatus_kLiteRtStatusOk {
+            unsafe { LiteRtDestroyOpaqueOptions(opaque_options) };
+            return Err(Error::new(ErrorCause::CreateOptions, status));
+        }
+
+        Ok(self)
+    }
+}
+
+fn c_string(value: &str) -> Result<CString, Error> {
+    CString::new(value).map_err(|_| {
+        Error::new(
+            ErrorCause::InvalidStringEncoding,
+            LiteRtStatus_kLiteRtStatusErrorInvalidArgument,
+        )
+    })
+}
+
+unsafe extern "C" fn destroy_c_string_payload(payload: *mut c_void) {
+    if !payload.is_null() {
+        unsafe { drop(CString::from_raw(payload.cast())) };
     }
 }
 
@@ -160,14 +217,41 @@ impl CompiledModel {
         model: &Model,
         signature_index: LiteRtParamIndex,
     ) -> Result<Vec<TensorBuffer<'_>>, Error> {
+        self.create_input_tensor_buffers_impl(environment, model, signature_index, None)
+    }
+
+    /// Creates input tensor buffers of the requested backing type.
+    pub fn create_input_tensor_buffers_with_type(
+        &self,
+        environment: &Environment,
+        model: &Model,
+        signature_index: LiteRtParamIndex,
+        buffer_type: TensorBufferType,
+    ) -> Result<Vec<TensorBuffer<'_>>, Error> {
+        self.create_input_tensor_buffers_impl(environment, model, signature_index, Some(buffer_type))
+    }
+
+    fn create_input_tensor_buffers_impl(
+        &self,
+        environment: &Environment,
+        model: &Model,
+        signature_index: LiteRtParamIndex,
+        buffer_type: Option<TensorBufferType>,
+    ) -> Result<Vec<TensorBuffer<'_>>, Error> {
         let signature = model.signature(signature_index)?;
         let subgraph = signature.subgraph()?;
         let mut result = Vec::with_capacity(signature.num_inputs()?);
-        for (i, input_name) in signature.input_names()?.enumerate() {
+        for i in 0..signature.num_inputs()? {
             let input_requirements = self.input_buffer_requirements(signature_index, i)?;
-            let tensor = subgraph.input_tensor_by_name(input_name?)?;
-            let buffer =
-                CompiledModel::create_buffer_impl(environment, &input_requirements, &tensor)?;
+            let tensor = subgraph.input_tensor(i)?;
+            let tensor_type = self.input_tensor_type(signature_index, i, &tensor)?;
+            let buffer = CompiledModel::create_buffer_impl(
+                environment,
+                &input_requirements,
+                &tensor_type,
+                tensor.element_type()?,
+                buffer_type.as_ref(),
+            )?;
             result.push(buffer);
         }
         Ok(result)
@@ -180,36 +264,176 @@ impl CompiledModel {
         model: &Model,
         signature_index: LiteRtParamIndex,
     ) -> Result<Vec<TensorBuffer<'_>>, Error> {
+        self.create_output_tensor_buffers_impl(environment, model, signature_index, None)
+    }
+
+    /// Creates output tensor buffers of the requested backing type.
+    pub fn create_output_tensor_buffers_with_type(
+        &self,
+        environment: &Environment,
+        model: &Model,
+        signature_index: LiteRtParamIndex,
+        buffer_type: TensorBufferType,
+    ) -> Result<Vec<TensorBuffer<'_>>, Error> {
+        self.create_output_tensor_buffers_impl(environment, model, signature_index, Some(buffer_type))
+    }
+
+    fn create_output_tensor_buffers_impl(
+        &self,
+        environment: &Environment,
+        model: &Model,
+        signature_index: LiteRtParamIndex,
+        buffer_type: Option<TensorBufferType>,
+    ) -> Result<Vec<TensorBuffer<'_>>, Error> {
         let signature = model.signature(signature_index)?;
         let subgraph = signature.subgraph()?;
-        let mut result = Vec::with_capacity(signature.num_outputs()?);
-        for (i, output_name) in signature.output_names()?.enumerate() {
+        let output_count = signature.num_outputs()?;
+        let output_layouts = self.output_tensor_layouts(signature_index, output_count)?;
+        let mut result = Vec::with_capacity(output_count);
+        for i in 0..output_count {
             let output_requirements = self.output_buffer_requirements(signature_index, i)?;
-            let tensor = subgraph.output_tensor_by_name(output_name?)?;
-            let buffer =
-                CompiledModel::create_buffer_impl(environment, &output_requirements, &tensor)?;
+            let tensor = subgraph.output_tensor(i)?;
+            let mut tensor_type = tensor.ranked_tensor_type()?;
+            tensor_type.layout = output_layouts[i];
+            let buffer = CompiledModel::create_buffer_impl(
+                environment,
+                &output_requirements,
+                &tensor_type,
+                tensor.element_type()?,
+                buffer_type.as_ref(),
+            )?;
             result.push(buffer);
         }
         Ok(result)
     }
 
+    fn input_tensor_type(
+        &self,
+        signature_index: LiteRtParamIndex,
+        input_index: LiteRtParamIndex,
+        tensor: &Tensor,
+    ) -> Result<LiteRtRankedTensorType, Error> {
+        let mut tensor_type = tensor.ranked_tensor_type()?;
+        call_check_status!(
+            // SAFETY: self.raw_compiled_model is valid because it's created by calling the create() function.
+            unsafe {
+                LiteRtGetCompiledModelInputTensorLayout(
+                    self.raw_compiled_model,
+                    signature_index,
+                    input_index,
+                    &mut tensor_type.layout,
+                )
+            },
+            ErrorCause::GetCompiledModelInputTensorLayout
+        );
+        Ok(tensor_type)
+    }
+
+    fn output_tensor_layouts(
+        &self,
+        signature_index: LiteRtParamIndex,
+        output_count: LiteRtParamIndex,
+    ) -> Result<Vec<LiteRtLayout>, Error> {
+        let mut output_layouts = vec![LiteRtLayout::default(); output_count];
+        call_check_status!(
+            // SAFETY: self.raw_compiled_model is valid because it's created by calling the create() function.
+            // output_layouts points to output_count valid LiteRtLayout values.
+            unsafe {
+                LiteRtGetCompiledModelOutputTensorLayouts(
+                    self.raw_compiled_model,
+                    signature_index,
+                    output_layouts.len(),
+                    output_layouts.as_mut_ptr(),
+                    false,
+                )
+            },
+            ErrorCause::GetCompiledModelOutputTensorLayouts
+        );
+        Ok(output_layouts)
+    }
+
+    /// Returns the current runtime shapes of a signature's output tensors.
+    pub fn output_tensor_shapes(
+        &self,
+        signature_index: LiteRtParamIndex,
+        output_count: LiteRtParamIndex,
+    ) -> Result<Vec<Vec<i32>>, Error> {
+        self.output_tensor_layouts(signature_index, output_count)
+            .map(|layouts| {
+                layouts
+                    .into_iter()
+                    .map(|layout| layout.dimensions[..layout.rank() as usize].to_vec())
+                    .collect()
+            })
+    }
+
     fn create_buffer_impl<'a>(
         environment: &Environment,
         requirements: &TensorBufferRequirements,
-        tensor: &Tensor,
+        tensor_type: &LiteRtRankedTensorType,
+        element_type: ElementType,
+        requested_type: Option<&TensorBufferType>,
     ) -> Result<TensorBuffer<'a>, Error> {
         let supported_types = requirements.supported_types()?;
-        // For simplicity we just pick the first supported tensor buffer type.
-        let Some(buffer_type) = supported_types.get(0) else {
-            return Err(Error::new(
-                ErrorCause::InputDoesntSupportAnyTensorBufferTypes,
-                LiteRtStatus_kLiteRtStatusErrorInvalidArgument,
-            ));
+        let buffer_type = if let Some(requested_type) = requested_type {
+            if !supported_types.contains(requested_type) {
+                return Err(Error::new(
+                    ErrorCause::InputDoesntSupportAnyTensorBufferTypes,
+                    LiteRtStatus_kLiteRtStatusErrorInvalidArgument,
+                ));
+            }
+            requested_type
+        } else {
+            let Some(buffer_type) = supported_types
+                .iter()
+                .find(|buffer_type| matches!(buffer_type, TensorBufferType::HostMemory))
+                .or_else(|| supported_types.first())
+            else {
+                return Err(Error::new(
+                    ErrorCause::InputDoesntSupportAnyTensorBufferTypes,
+                    LiteRtStatus_kLiteRtStatusErrorInvalidArgument,
+                ));
+            };
+            buffer_type
         };
-        let tensor_type = tensor.ranked_tensor_type()?;
-        let element_type = tensor.element_type()?;
         let buffer_size = requirements.buffer_size()?;
-        TensorBuffer::new(environment, &tensor_type, buffer_type, buffer_size, element_type)
+        TensorBuffer::new(
+            environment,
+            tensor_type,
+            buffer_type,
+            buffer_size,
+            element_type,
+        )
+    }
+
+    /// Resizes an input tensor for a dynamic input shape.
+    pub fn resize_input_tensor(
+        &self,
+        signature_index: LiteRtParamIndex,
+        input_index: LiteRtParamIndex,
+        dims: &[i32],
+        strict: bool,
+    ) -> Result<(), Error> {
+        let resize = if strict {
+            LiteRtCompiledModelResizeInputTensor
+        } else {
+            LiteRtCompiledModelResizeInputTensorNonStrict
+        };
+        call_check_status!(
+            // SAFETY: self.raw_compiled_model is valid because it's created by calling the create() function.
+            // dims.as_ptr() is valid for dims.len() elements.
+            unsafe {
+                resize(
+                    self.raw_compiled_model,
+                    signature_index,
+                    input_index,
+                    dims.as_ptr(),
+                    dims.len(),
+                )
+            },
+            ErrorCause::ResizeInputTensor
+        );
+        Ok(())
     }
 
     /// Runs inference on the compiled model.

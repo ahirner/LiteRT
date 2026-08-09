@@ -297,7 +297,7 @@ impl<'a> Subgraph<'a> {
         Ok(num_outputs)
     }
 
-    fn input_tensor(&self, tensor_index: LiteRtParamIndex) -> Result<Tensor<'_>, Error> {
+    pub fn input_tensor(&self, tensor_index: LiteRtParamIndex) -> Result<Tensor<'_>, Error> {
         let mut raw_tensor_ptr: LiteRtTensor = std::ptr::null_mut();
         call_check_status!(
             // SAFETY: self.raw_subgraph is always valid as it's initialized by a wrapper function.
@@ -323,7 +323,7 @@ impl<'a> Subgraph<'a> {
         ));
     }
 
-    fn output_tensor(&self, tensor_index: LiteRtParamIndex) -> Result<Tensor<'_>, Error> {
+    pub fn output_tensor(&self, tensor_index: LiteRtParamIndex) -> Result<Tensor<'_>, Error> {
         let mut raw_tensor_ptr: LiteRtTensor = std::ptr::null_mut();
         call_check_status!(
             // SAFETY: self.raw_subgraph is always valid as it's initialized by a wrapper function.
@@ -420,6 +420,34 @@ impl Model {
             index: 0,
             total_num_signatures: self.num_signatures()?,
         })
+    }
+
+    /// Returns model metadata by key.
+    pub fn metadata(&self, key: &str) -> Result<Option<&[u8]>, Error> {
+        // TODO: Handle interior-NUL CString conversion errors consistently across this crate.
+        let key = CString::new(key).expect("CString::new failed: string contains null bytes");
+        let mut metadata_buffer: *const c_void = std::ptr::null();
+        let mut metadata_buffer_size = 0;
+        let status = unsafe {
+            LiteRtGetModelMetadata(
+                self.raw_model,
+                key.as_ptr(),
+                &mut metadata_buffer,
+                &mut metadata_buffer_size,
+            )
+        };
+        if status == LiteRtStatus_kLiteRtStatusErrorNotFound {
+            return Ok(None);
+        }
+        if status != LiteRtStatus_kLiteRtStatusOk {
+            return Err(Error::new(ErrorCause::GetModelMetadata, status));
+        }
+        if metadata_buffer.is_null() {
+            return Ok(None);
+        }
+        Ok(Some(unsafe {
+            std::slice::from_raw_parts(metadata_buffer.cast::<u8>(), metadata_buffer_size)
+        }))
     }
 
     /// Returns the signature at the given index.

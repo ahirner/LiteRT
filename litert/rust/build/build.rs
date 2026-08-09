@@ -15,7 +15,9 @@
 use build_print::info;
 use std::env;
 use std::fs::{self, File};
-use std::io::{self, copy};
+use std::io::copy;
+#[cfg(feature = "cpp-sdk")]
+use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -219,6 +221,7 @@ fn check_tool_installed(tool: &str) -> Result<(), String> {
 }
 
 // Helper function to download a file
+#[cfg(feature = "cpp-sdk")]
 fn download_file(url: &str, path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let client = reqwest::blocking::Client::builder()
         .timeout(None) // Disable total request timeout
@@ -230,6 +233,12 @@ fn download_file(url: &str, path: &Path) -> Result<(), Box<dyn std::error::Error
     Ok(())
 }
 
+#[cfg(not(feature = "cpp-sdk"))]
+fn download_file(_url: &str, _path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    Err("download_file requires the cpp-sdk feature".into())
+}
+
+#[cfg(feature = "cpp-sdk")]
 fn unzip_archive(
     archive_path: &Path,
     extract_to: &Path,
@@ -261,6 +270,14 @@ fn unzip_archive(
         }
     }
     Ok(root_directory)
+}
+
+#[cfg(not(feature = "cpp-sdk"))]
+fn unzip_archive(
+    _archive_path: &Path,
+    _extract_to: &Path,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    Err("unzip_archive requires the cpp-sdk feature".into())
 }
 
 fn download_runtime(
@@ -367,14 +384,40 @@ fn copy_wrapper_h(out_dir: &Path) -> Result<PathBuf, Box<dyn std::error::Error>>
     Ok(wrapper_h_path)
 }
 
-fn dump_all_env_vars() {
-    for (key, value) in env::vars() {
-        info!("Environment: {}: {}", key, value);
-    }
+fn generate_bindings_from_source() -> Result<(), Box<dyn std::error::Error>> {
+    println!("cargo::rerun-if-changed=../c");
+    println!("cargo::rerun-if-changed=../build_common/config/build_config_cpu_only.h");
+    println!("cargo::rustc-link-lib=dylib=LiteRt");
+    let out_dir = PathBuf::from(env::var(OUT_DIR_ENV_VAR)?);
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?);
+    let repo_root = manifest_dir
+        .parent()
+        .and_then(|path| path.parent())
+        .ok_or_else(|| std::io::Error::other("LiteRT repository root is unavailable"))?;
+    let generated_include_dir = out_dir.join("source_include");
+    let build_config_path = generated_include_dir.join("litert/build_common/build_config.h");
+    fs::create_dir_all(build_config_path.parent().unwrap())?;
+    fs::copy(
+        repo_root.join("litert/build_common/config/build_config_cpu_only.h"),
+        build_config_path,
+    )?;
+
+    let bindings = bindgen::Builder::default()
+        .header("wrapper.h")
+        .clang_arg(format!("-I{}", repo_root.display()))
+        .clang_arg(format!("-I{}", generated_include_dir.display()))
+        .layout_tests(false)
+        .derive_default(true)
+        .generate()
+        .expect("Unable to generate bindings");
+    let bindings_out_path = out_dir.join("bindings.rs");
+    info!("Writing binding.rs to {}", bindings_out_path.display());
+    bindings.write_to_file(bindings_out_path).expect("Couldn't write bindings!");
+    println!("cargo::rustc-cfg=cargo_bindgen");
+    Ok(())
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    dump_all_env_vars();
     println!("cargo::rustc-check-cfg=cfg(bazel_bindgen, cargo_bindgen, docsrs, async_support)");
     // Check if we are currently generating documentation
     let is_doc_gen = env::var(CARGO_DOCS_RS).is_ok();
@@ -390,6 +433,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo::rerun-if-changed=wrapper.h");
     if env::var("CARGO_FEATURE_ASYNC_SUPPORT").is_ok() {
         println!("cargo::rustc-cfg=async_support");
+    }
+    if !cfg!(feature = "cpp-sdk") {
+        return generate_bindings_from_source();
     }
 
     if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {

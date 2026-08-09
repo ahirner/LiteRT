@@ -26,6 +26,9 @@ license = "Apache-2.0"
 # If enabled, the runtime will be build using Docker, otherwise
 # a prebuild binary for the target platform will be downloaded.
 [features]
+default = ["cpp-sdk"]
+# Download and build the LiteRT C++ SDK alongside the Rust bindings.
+cpp-sdk = ["dep:reqwest", "dep:zip"]
 # Enable Metal accelerator (macOS)
 metal = []
 # Enable OpenGL accelerator
@@ -41,7 +44,6 @@ path = "src/lib.rs"
 
 [build-dependencies]
 bindgen = "0.72"
-reqwest = { version = "0.11", features = ["blocking"] }
-zip = "0.6"
-anyhow = "1.0" # For easy error handling in build script
+reqwest = { version = "0.11", features = ["blocking"], optional = true }
+zip = { version = "0.6", optional = true }
 build-print = "1"
