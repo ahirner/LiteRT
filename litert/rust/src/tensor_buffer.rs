@@ -178,11 +178,11 @@ impl ElementType {
         let type_id = TypeId::of::<T>();
         if TypeId::of::<bool>() == type_id {
             self == Self::Bool
-        } else if TypeId::of::<i8>() == type_id || TypeId::of::<i8>() == type_id {
+        } else if TypeId::of::<i8>() == type_id || TypeId::of::<u8>() == type_id {
             self == Self::Int8 || self == Self::UInt8
-        } else if TypeId::of::<i16>() == type_id || TypeId::of::<i16>() == type_id {
+        } else if TypeId::of::<i16>() == type_id || TypeId::of::<u16>() == type_id {
             self == Self::Int16 || self == Self::UInt16
-        } else if TypeId::of::<i32>() == type_id || TypeId::of::<i32>() == type_id {
+        } else if TypeId::of::<i32>() == type_id || TypeId::of::<u32>() == type_id {
             self == Self::Int32 || self == Self::UInt32
         } else if TypeId::of::<f32>() == type_id {
             self == Self::Float32
@@ -751,6 +751,9 @@ mod tests {
     #[test]
     fn test_element_type_compatibility() {
         assert!(ElementType::Bool.is_compatible::<bool>());
+        assert!(ElementType::UInt8.is_compatible::<u8>());
+        assert!(ElementType::UInt16.is_compatible::<u16>());
+        assert!(ElementType::UInt32.is_compatible::<u32>());
         assert!(!ElementType::Bool.is_compatible::<u32>());
         assert!(!ElementType::Float32.is_compatible::<u32>());
     }
