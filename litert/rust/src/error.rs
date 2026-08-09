@@ -80,6 +80,7 @@ pub enum ErrorCause {
     ReadBufferTooSmall,
     HasTensorBufferEvent,
     GetTensorBufferEvent,
+    ClearTensorBufferEvent,
     IsEventSignaled,
     WaitEvent,
     CreateManagedEvent,

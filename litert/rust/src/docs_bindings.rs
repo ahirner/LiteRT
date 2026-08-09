@@ -756,6 +756,10 @@ pub fn LiteRtSetTensorBufferEvent(
     unimplemented!()
 }
 
+pub fn LiteRtClearTensorBufferEvent(tensor_buffer: LiteRtTensorBuffer) -> LiteRtStatus {
+    unimplemented!()
+}
+
 pub fn LiteRtIsEventSignaled(event: LiteRtEvent, is_signaled: *mut bool) -> LiteRtStatus {
     unimplemented!()
 }

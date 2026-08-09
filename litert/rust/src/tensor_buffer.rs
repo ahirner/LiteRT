@@ -580,6 +580,13 @@ impl<'a> TensorBuffer<'a> {
         unsafe {
             std::ptr::copy(lock.raw_data, data.as_mut_ptr(), to_copy);
         }
+        drop(lock);
+        #[cfg(async_support)]
+        call_check_status!(
+            // SAFETY: self.raw_tensor_buffer is always valid.
+            unsafe { LiteRtClearTensorBufferEvent(self.raw_tensor_buffer) },
+            ErrorCause::ClearTensorBufferEvent
+        );
         Ok(to_copy)
     }
 
@@ -886,5 +893,6 @@ mod tests {
         block_on(buffer.read_async(&mut output_data)).unwrap();
 
         assert_eq!(input_data, output_data);
+        assert!(!buffer.has_event().unwrap());
     }
 }
