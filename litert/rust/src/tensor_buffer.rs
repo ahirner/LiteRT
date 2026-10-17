@@ -514,6 +514,18 @@ impl<'a> TensorBuffer<'a> {
         Ok(size)
     }
 
+    /// Returns the underlying Metal buffer or texture handle.
+    pub fn metal_memory(&self) -> Result<*mut c_void, Error> {
+        let mut metal_memory: HwMemoryHandle = std::ptr::null_mut();
+        call_check_status!(
+            // SAFETY: self.raw_tensor_buffer is always valid, it's guaranteed to be initialized by
+            // a wrapper function. LiteRT validates whether the backing memory is Metal memory.
+            unsafe { LiteRtGetTensorBufferMetalMemory(self.raw_tensor_buffer, &mut metal_memory) },
+            ErrorCause::GetTensorBufferMetalMemory
+        );
+        Ok(metal_memory)
+    }
+
     /// Writes data to the tensor buffer.
     ///
     /// The data must be compatible with the element type of the tensor buffer.

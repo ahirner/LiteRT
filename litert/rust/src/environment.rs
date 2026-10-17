@@ -16,7 +16,7 @@ use crate::bindings::*;
 use crate::call_check_status;
 use crate::error::{Error, ErrorCause};
 use std::any::{Any, TypeId};
-use std::ffi::CString;
+use std::ffi::{c_void, CString};
 
 /// Options for environment Tags.
 pub enum OptionTag {
@@ -158,6 +158,14 @@ impl EnvironmentBuilder {
             Ok(LiteRtAny {
                 type_: LiteRtAnyType_kLiteRtAnyTypeString,
                 __bindgen_anon_1: LiteRtAny__bindgen_ty_1 { str_value: cstr_ptr },
+            })
+        } else if TypeId::of::<*mut c_void>() == type_id {
+            Ok(LiteRtAny {
+                type_: LiteRtAnyType_kLiteRtAnyTypeVoidPtr,
+                __bindgen_anon_1: LiteRtAny__bindgen_ty_1 {
+                    // SAFETY: unwrap is safe here, because we checked that type_id is of<*mut c_void>.
+                    ptr_value: *any_value.downcast_ref::<*mut c_void>().unwrap() as *const c_void,
+                },
             })
         } else {
             Err(Error::new(
