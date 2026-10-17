@@ -395,8 +395,8 @@ impl From<LiteRtParamIndex> for SignatureIndex {
 }
 
 impl Model {
-    /// Canonicalizes constant FP16 conversion scheduling and supported NHWC max-pooling
-    /// reductions before GPU compilation. Preserves weights, signatures and metadata.
+    /// Schedules constant FP16 conversions before image operations for GPU compilation.
+    /// Preserves weights, signatures and metadata.
     /// Call before creating any model that borrows this buffer.
     pub fn prepare_for_gpu(buffer: &mut Vec<u8>) -> Result<(), Error> {
         crate::model_preparation::prepare(buffer).ok_or_else(|| {
