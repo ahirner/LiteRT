@@ -28,6 +28,8 @@ pub enum ErrorCause {
     CreateCompiledModel,
     GetCompiledModelInputBufferRequirements,
     GetCompiledModelOutputBufferRequirements,
+    GetCompiledModelInputTensorLayout,
+    GetCompiledModelOutputTensorLayouts,
     InputDoesntSupportAnyTensorBufferTypes,
     ResizeCompiledModelInputBuffer,
     RunCompiledModel,
