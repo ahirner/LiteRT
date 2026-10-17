@@ -108,6 +108,7 @@ pub mod environment;
 pub mod error;
 mod helper_funs;
 pub mod model;
+mod model_preparation;
 pub mod tensor_buffer;
 #[macro_use]
 mod macros;

@@ -57,6 +57,7 @@ pub enum ErrorCause {
     SubgraphOutputTensorByNameNotFound,
     CreateModelFromFile,
     CreateModelFromBuffer,
+    PrepareModelForGpu,
     GetNumModelSubgraphs,
     GetNumModelSignatures,
     GetModelSignature,

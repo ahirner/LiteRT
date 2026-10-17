@@ -395,6 +395,18 @@ impl From<LiteRtParamIndex> for SignatureIndex {
 }
 
 impl Model {
+    /// Schedules constant FP16 conversions before image operations for GPU compilation.
+    /// Preserves weights, signatures and metadata.
+    /// Call before creating any model that borrows this buffer.
+    pub fn prepare_for_gpu(buffer: &mut Vec<u8>) -> Result<(), Error> {
+        crate::model_preparation::prepare(buffer).ok_or_else(|| {
+            Error::new(
+                ErrorCause::PrepareModelForGpu,
+                LiteRtStatus_kLiteRtStatusErrorInvalidArgument,
+            )
+        })
+    }
+
     /// Creates a model from a file path.
     pub fn create_model_from_file(environment: &Environment, path: &str) -> Result<Self, Error> {
         let path_c_string =
