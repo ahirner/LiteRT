@@ -24,7 +24,7 @@ include!(env!("BINDGEN_RS_FILE"));
 #[cfg(cargo_bindgen)]
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
-#[cfg(docsrs)]
+#[cfg(all(docsrs, not(cargo_bindgen)))]
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/docs_bindings.rs"));
 
 #[cfg(test)]
