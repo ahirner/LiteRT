@@ -464,13 +464,43 @@ impl Model {
         })
     }
 
+    /// Returns model metadata by key.
+    pub fn metadata(&self, key: &str) -> Result<Option<&[u8]>, Error> {
+        // TODO: Handle interior-NUL CString conversion errors consistently across this crate.
+        let key = CString::new(key).expect("CString::new failed: string contains null bytes");
+        let mut metadata_buffer: *const c_void = std::ptr::null();
+        let mut metadata_buffer_size = 0;
+        let status = unsafe {
+            LiteRtGetModelMetadata(
+                self.raw_model,
+                key.as_ptr(),
+                &mut metadata_buffer,
+                &mut metadata_buffer_size,
+            )
+        };
+        if status == LiteRtStatus_kLiteRtStatusErrorNotFound {
+            return Ok(None);
+        }
+        if status != LiteRtStatus_kLiteRtStatusOk {
+            return Err(Error::new(ErrorCause::GetModelMetadata, status));
+        }
+        if metadata_buffer.is_null() {
+            return Ok(None);
+        }
+        Ok(Some(unsafe {
+            std::slice::from_raw_parts(metadata_buffer.cast::<u8>(), metadata_buffer_size)
+        }))
+    }
+
     /// Returns the signature at the given index.
     pub fn signature(&self, index: SignatureIndex) -> Result<Signature<'_>, Error> {
         let mut raw_signature_ptr: LiteRtSignature = std::ptr::null_mut();
         call_check_status!(
             // SAFETY: self.raw_model is always valid as it's initialized by a wrapper function.
             // We assume that the output is valid if the return status is OK or don't use the output pointers.
-            unsafe { LiteRtGetModelSignature(self.raw_model, index.value(), &mut raw_signature_ptr) },
+            unsafe {
+                LiteRtGetModelSignature(self.raw_model, index.value(), &mut raw_signature_ptr)
+            },
             ErrorCause::GetModelSignature
         );
         Ok(Signature { raw_signature: raw_signature_ptr, _phantom: PhantomData {} })
