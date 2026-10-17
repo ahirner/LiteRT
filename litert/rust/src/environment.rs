@@ -30,6 +30,7 @@ pub enum OptionTag {
     EglDisplay,
     WebGpuDevice,
     WebGpuQueue,
+    WebGpuInstance,
     MetalDevice,
     MetalCommandQueue,
     // TODO(mgubin): Add VulkanEnvironment.
@@ -50,6 +51,7 @@ impl OptionTag {
             Self::EglDisplay => LiteRtEnvOptionTag_kLiteRtEnvOptionTagEglDisplay,
             Self::WebGpuDevice => LiteRtEnvOptionTag_kLiteRtEnvOptionTagWebGpuDevice,
             Self::WebGpuQueue => LiteRtEnvOptionTag_kLiteRtEnvOptionTagWebGpuQueue,
+            Self::WebGpuInstance => LiteRtEnvOptionTag_kLiteRtEnvOptionTagWebGpuInstance,
             Self::MetalDevice => LiteRtEnvOptionTag_kLiteRtEnvOptionTagMetalDevice,
             Self::MetalCommandQueue => LiteRtEnvOptionTag_kLiteRtEnvOptionTagMetalCommandQueue,
         }
