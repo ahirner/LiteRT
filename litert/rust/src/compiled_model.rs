@@ -21,7 +21,7 @@ use crate::call_check_status;
 use crate::environment::Environment;
 use crate::error::{Error, ErrorCause};
 use crate::model::{Model, SignatureIndex, Tensor};
-use crate::tensor_buffer::{ElementType, TensorBuffer, TensorBufferRequirements};
+use crate::tensor_buffer::{ElementType, TensorBuffer, TensorBufferRequirements, TensorBufferType};
 
 /// Options for compiling a model.
 pub struct Options {
@@ -218,6 +218,32 @@ impl CompiledModel {
         model: &Model,
         signature_index: SignatureIndex,
     ) -> Result<Vec<TensorBuffer<'_>>, Error> {
+        self.create_input_tensor_buffers_impl(environment, model, signature_index, None)
+    }
+
+    /// Creates input tensor buffers of the requested backing type.
+    pub fn create_input_tensor_buffers_with_type(
+        &self,
+        environment: &Environment,
+        model: &Model,
+        signature_index: SignatureIndex,
+        buffer_type: TensorBufferType,
+    ) -> Result<Vec<TensorBuffer<'_>>, Error> {
+        self.create_input_tensor_buffers_impl(
+            environment,
+            model,
+            signature_index,
+            Some(buffer_type),
+        )
+    }
+
+    fn create_input_tensor_buffers_impl(
+        &self,
+        environment: &Environment,
+        model: &Model,
+        signature_index: SignatureIndex,
+        buffer_type: Option<TensorBufferType>,
+    ) -> Result<Vec<TensorBuffer<'_>>, Error> {
         let signature = model.signature(signature_index)?;
         let subgraph = signature.subgraph()?;
         let mut result = Vec::with_capacity(signature.num_inputs()?);
@@ -230,6 +256,7 @@ impl CompiledModel {
                 &input_requirements,
                 &tensor_type,
                 tensor.element_type()?,
+                buffer_type.as_ref(),
             )?;
             result.push(buffer);
         }
@@ -242,6 +269,32 @@ impl CompiledModel {
         environment: &Environment,
         model: &Model,
         signature_index: SignatureIndex,
+    ) -> Result<Vec<TensorBuffer<'_>>, Error> {
+        self.create_output_tensor_buffers_impl(environment, model, signature_index, None)
+    }
+
+    /// Creates output tensor buffers of the requested backing type.
+    pub fn create_output_tensor_buffers_with_type(
+        &self,
+        environment: &Environment,
+        model: &Model,
+        signature_index: SignatureIndex,
+        buffer_type: TensorBufferType,
+    ) -> Result<Vec<TensorBuffer<'_>>, Error> {
+        self.create_output_tensor_buffers_impl(
+            environment,
+            model,
+            signature_index,
+            Some(buffer_type),
+        )
+    }
+
+    fn create_output_tensor_buffers_impl(
+        &self,
+        environment: &Environment,
+        model: &Model,
+        signature_index: SignatureIndex,
+        buffer_type: Option<TensorBufferType>,
     ) -> Result<Vec<TensorBuffer<'_>>, Error> {
         let signature = model.signature(signature_index)?;
         let subgraph = signature.subgraph()?;
@@ -258,6 +311,7 @@ impl CompiledModel {
                 &output_requirements,
                 &tensor_type,
                 tensor.element_type()?,
+                buffer_type.as_ref(),
             )?;
             result.push(buffer);
         }
@@ -328,14 +382,29 @@ impl CompiledModel {
         requirements: &TensorBufferRequirements,
         tensor_type: &LiteRtRankedTensorType,
         element_type: ElementType,
+        requested_type: Option<&TensorBufferType>,
     ) -> Result<TensorBuffer<'a>, Error> {
         let supported_types = requirements.supported_types()?;
-        // For simplicity we just pick the first supported tensor buffer type.
-        let Some(buffer_type) = supported_types.get(0) else {
-            return Err(Error::new(
-                ErrorCause::InputDoesntSupportAnyTensorBufferTypes,
-                LiteRtStatus_kLiteRtStatusErrorInvalidArgument,
-            ));
+        let buffer_type = if let Some(requested_type) = requested_type {
+            if !supported_types.contains(requested_type) {
+                return Err(Error::new(
+                    ErrorCause::InputDoesntSupportAnyTensorBufferTypes,
+                    LiteRtStatus_kLiteRtStatusErrorInvalidArgument,
+                ));
+            }
+            requested_type
+        } else {
+            let Some(buffer_type) = supported_types
+                .iter()
+                .find(|buffer_type| matches!(buffer_type, TensorBufferType::HostMemory))
+                .or_else(|| supported_types.first())
+            else {
+                return Err(Error::new(
+                    ErrorCause::InputDoesntSupportAnyTensorBufferTypes,
+                    LiteRtStatus_kLiteRtStatusErrorInvalidArgument,
+                ));
+            };
+            buffer_type
         };
         let buffer_size = requirements.buffer_size()?;
         TensorBuffer::new(environment, tensor_type, buffer_type, buffer_size, element_type)
