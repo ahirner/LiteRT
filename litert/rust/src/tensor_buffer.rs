@@ -178,11 +178,11 @@ impl ElementType {
         let type_id = TypeId::of::<T>();
         if TypeId::of::<bool>() == type_id {
             self == Self::Bool
-        } else if TypeId::of::<i8>() == type_id || TypeId::of::<i8>() == type_id {
+        } else if TypeId::of::<i8>() == type_id || TypeId::of::<u8>() == type_id {
             self == Self::Int8 || self == Self::UInt8
-        } else if TypeId::of::<i16>() == type_id || TypeId::of::<i16>() == type_id {
+        } else if TypeId::of::<i16>() == type_id || TypeId::of::<u16>() == type_id {
             self == Self::Int16 || self == Self::UInt16
-        } else if TypeId::of::<i32>() == type_id || TypeId::of::<i32>() == type_id {
+        } else if TypeId::of::<i32>() == type_id || TypeId::of::<u32>() == type_id {
             self == Self::Int32 || self == Self::UInt32
         } else if TypeId::of::<f32>() == type_id {
             self == Self::Float32
@@ -195,6 +195,7 @@ impl ElementType {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TensorBufferType {
     Unknown,
     HostMemory,
@@ -209,6 +210,29 @@ pub enum TensorBufferType {
     OpenClTexture,
     OpenClTextureFp16,
     OpenClBufferPacked,
+    OpenClImageBuffer,
+    OpenClImageBufferFp16,
+    WebGpuBuffer,
+    WebGpuBufferFp16,
+    WebGpuTexture,
+    WebGpuTextureFp16,
+    WebGpuImageBuffer,
+    WebGpuImageBufferFp16,
+    WebGpuBufferPacked,
+    MetalBuffer,
+    MetalBufferFp16,
+    MetalTexture,
+    MetalTextureFp16,
+    MetalBufferPacked,
+    VulkanBuffer,
+    VulkanBufferFp16,
+    VulkanTexture,
+    VulkanTextureFp16,
+    VulkanImageBuffer,
+    VulkanImageBufferFp16,
+    VulkanBufferPacked,
+    UserCustomBuffer,
+    UserCustomBufferEnd,
 }
 
 impl TensorBufferType {
@@ -233,6 +257,61 @@ impl TensorBufferType {
             Self::OpenClBufferPacked => {
                 LiteRtTensorBufferType_kLiteRtTensorBufferTypeOpenClBufferPacked
             }
+            Self::OpenClImageBuffer => {
+                LiteRtTensorBufferType_kLiteRtTensorBufferTypeOpenClImageBuffer
+            }
+            Self::OpenClImageBufferFp16 => {
+                LiteRtTensorBufferType_kLiteRtTensorBufferTypeOpenClImageBufferFp16
+            }
+            Self::WebGpuBuffer => LiteRtTensorBufferType_kLiteRtTensorBufferTypeWebGpuBuffer,
+            Self::WebGpuBufferFp16 => {
+                LiteRtTensorBufferType_kLiteRtTensorBufferTypeWebGpuBufferFp16
+            }
+            Self::WebGpuTexture => LiteRtTensorBufferType_kLiteRtTensorBufferTypeWebGpuTexture,
+            Self::WebGpuTextureFp16 => {
+                LiteRtTensorBufferType_kLiteRtTensorBufferTypeWebGpuTextureFp16
+            }
+            Self::WebGpuImageBuffer => {
+                LiteRtTensorBufferType_kLiteRtTensorBufferTypeWebGpuImageBuffer
+            }
+            Self::WebGpuImageBufferFp16 => {
+                LiteRtTensorBufferType_kLiteRtTensorBufferTypeWebGpuImageBufferFp16
+            }
+            Self::WebGpuBufferPacked => {
+                LiteRtTensorBufferType_kLiteRtTensorBufferTypeWebGpuBufferPacked
+            }
+            Self::MetalBuffer => LiteRtTensorBufferType_kLiteRtTensorBufferTypeMetalBuffer,
+            Self::MetalBufferFp16 => LiteRtTensorBufferType_kLiteRtTensorBufferTypeMetalBufferFp16,
+            Self::MetalTexture => LiteRtTensorBufferType_kLiteRtTensorBufferTypeMetalTexture,
+            Self::MetalTextureFp16 => {
+                LiteRtTensorBufferType_kLiteRtTensorBufferTypeMetalTextureFp16
+            }
+            Self::MetalBufferPacked => {
+                LiteRtTensorBufferType_kLiteRtTensorBufferTypeMetalBufferPacked
+            }
+            Self::VulkanBuffer => LiteRtTensorBufferType_kLiteRtTensorBufferTypeVulkanBuffer,
+            Self::VulkanBufferFp16 => {
+                LiteRtTensorBufferType_kLiteRtTensorBufferTypeVulkanBufferFp16
+            }
+            Self::VulkanTexture => LiteRtTensorBufferType_kLiteRtTensorBufferTypeVulkanTexture,
+            Self::VulkanTextureFp16 => {
+                LiteRtTensorBufferType_kLiteRtTensorBufferTypeVulkanTextureFp16
+            }
+            Self::VulkanImageBuffer => {
+                LiteRtTensorBufferType_kLiteRtTensorBufferTypeVulkanImageBuffer
+            }
+            Self::VulkanImageBufferFp16 => {
+                LiteRtTensorBufferType_kLiteRtTensorBufferTypeVulkanImageBufferFp16
+            }
+            Self::VulkanBufferPacked => {
+                LiteRtTensorBufferType_kLiteRtTensorBufferTypeVulkanBufferPacked
+            }
+            Self::UserCustomBuffer => {
+                LiteRtTensorBufferType_kLiteRtTensorBufferTypeUserCustomBuffer
+            }
+            Self::UserCustomBufferEnd => {
+                LiteRtTensorBufferType_kLiteRtTensorBufferTypeUserCustomBufferEnd
+            }
         }
     }
     pub fn from_c_enum(enum_value: LiteRtTensorBufferType) -> Result<TensorBufferType, Error> {
@@ -256,6 +335,63 @@ impl TensorBufferType {
             LiteRtTensorBufferType_kLiteRtTensorBufferTypeOpenClBufferPacked => {
                 Ok(Self::OpenClBufferPacked)
             }
+            LiteRtTensorBufferType_kLiteRtTensorBufferTypeOpenClImageBuffer => {
+                Ok(Self::OpenClImageBuffer)
+            }
+            LiteRtTensorBufferType_kLiteRtTensorBufferTypeOpenClImageBufferFp16 => {
+                Ok(Self::OpenClImageBufferFp16)
+            }
+            LiteRtTensorBufferType_kLiteRtTensorBufferTypeWebGpuBuffer => Ok(Self::WebGpuBuffer),
+            LiteRtTensorBufferType_kLiteRtTensorBufferTypeWebGpuBufferFp16 => {
+                Ok(Self::WebGpuBufferFp16)
+            }
+            LiteRtTensorBufferType_kLiteRtTensorBufferTypeWebGpuTexture => Ok(Self::WebGpuTexture),
+            LiteRtTensorBufferType_kLiteRtTensorBufferTypeWebGpuTextureFp16 => {
+                Ok(Self::WebGpuTextureFp16)
+            }
+            LiteRtTensorBufferType_kLiteRtTensorBufferTypeWebGpuImageBuffer => {
+                Ok(Self::WebGpuImageBuffer)
+            }
+            LiteRtTensorBufferType_kLiteRtTensorBufferTypeWebGpuImageBufferFp16 => {
+                Ok(Self::WebGpuImageBufferFp16)
+            }
+            LiteRtTensorBufferType_kLiteRtTensorBufferTypeWebGpuBufferPacked => {
+                Ok(Self::WebGpuBufferPacked)
+            }
+            LiteRtTensorBufferType_kLiteRtTensorBufferTypeMetalBuffer => Ok(Self::MetalBuffer),
+            LiteRtTensorBufferType_kLiteRtTensorBufferTypeMetalBufferFp16 => {
+                Ok(Self::MetalBufferFp16)
+            }
+            LiteRtTensorBufferType_kLiteRtTensorBufferTypeMetalTexture => Ok(Self::MetalTexture),
+            LiteRtTensorBufferType_kLiteRtTensorBufferTypeMetalTextureFp16 => {
+                Ok(Self::MetalTextureFp16)
+            }
+            LiteRtTensorBufferType_kLiteRtTensorBufferTypeMetalBufferPacked => {
+                Ok(Self::MetalBufferPacked)
+            }
+            LiteRtTensorBufferType_kLiteRtTensorBufferTypeVulkanBuffer => Ok(Self::VulkanBuffer),
+            LiteRtTensorBufferType_kLiteRtTensorBufferTypeVulkanBufferFp16 => {
+                Ok(Self::VulkanBufferFp16)
+            }
+            LiteRtTensorBufferType_kLiteRtTensorBufferTypeVulkanTexture => Ok(Self::VulkanTexture),
+            LiteRtTensorBufferType_kLiteRtTensorBufferTypeVulkanTextureFp16 => {
+                Ok(Self::VulkanTextureFp16)
+            }
+            LiteRtTensorBufferType_kLiteRtTensorBufferTypeVulkanImageBuffer => {
+                Ok(Self::VulkanImageBuffer)
+            }
+            LiteRtTensorBufferType_kLiteRtTensorBufferTypeVulkanImageBufferFp16 => {
+                Ok(Self::VulkanImageBufferFp16)
+            }
+            LiteRtTensorBufferType_kLiteRtTensorBufferTypeVulkanBufferPacked => {
+                Ok(Self::VulkanBufferPacked)
+            }
+            LiteRtTensorBufferType_kLiteRtTensorBufferTypeUserCustomBuffer => {
+                Ok(Self::UserCustomBuffer)
+            }
+            LiteRtTensorBufferType_kLiteRtTensorBufferTypeUserCustomBufferEnd => {
+                Ok(Self::UserCustomBufferEnd)
+            }
             _ => Err(Error::new(
                 ErrorCause::InvalidTensorBufferTypeEnumValue,
                 LiteRtStatus_kLiteRtStatusErrorInvalidArgument,
@@ -268,7 +404,20 @@ pub struct TensorBuffer<'a> {
     pub(crate) raw_tensor_buffer: LiteRtTensorBuffer,
     element_type: ElementType,
     dimensions: Vec<i32>,
+    imported_webgpu_buffer: Option<ImportedWebGpuBuffer>,
     _phantom: PhantomData<&'a LiteRtTensorBuffer>,
+}
+
+struct ImportedWebGpuBuffer {
+    handle: *mut c_void,
+    release: unsafe extern "C" fn(*mut c_void),
+}
+
+impl Drop for ImportedWebGpuBuffer {
+    fn drop(&mut self) {
+        // SAFETY: import transfers one owned reference and its matching release function.
+        unsafe { (self.release)(self.handle) };
+    }
 }
 
 struct TensorBufferLock<'a, T> {
@@ -310,12 +459,12 @@ impl<'a> TensorBuffer<'a> {
             ErrorCause::CreateManagedTensorBuffer
         );
         let dimensions =
-            tensor_type.layout.dimensions[..tensor_type.layout.rank().try_into().unwrap()]
-                .to_vec();
+            tensor_type.layout.dimensions[..tensor_type.layout.rank().try_into().unwrap()].to_vec();
         Ok(TensorBuffer {
             raw_tensor_buffer: buffer_ptr,
             dimensions,
             element_type,
+            imported_webgpu_buffer: None,
             _phantom: PhantomData {},
         })
     }
@@ -376,6 +525,76 @@ impl<'a> TensorBuffer<'a> {
             ErrorCause::GetTensorBufferPackedSize
         );
         Ok(size)
+    }
+
+    /// Returns the underlying Metal buffer or texture handle.
+    pub fn metal_memory(&self) -> Result<*mut c_void, Error> {
+        let mut metal_memory: HwMemoryHandle = std::ptr::null_mut();
+        call_check_status!(
+            // SAFETY: self.raw_tensor_buffer is always valid, it's guaranteed to be initialized by
+            // a wrapper function. LiteRT validates whether the backing memory is Metal memory.
+            unsafe { LiteRtGetTensorBufferMetalMemory(self.raw_tensor_buffer, &mut metal_memory) },
+            ErrorCause::GetTensorBufferMetalMemory
+        );
+        Ok(metal_memory)
+    }
+
+    /// Imports a packed WebGPU buffer and takes ownership on success.
+    ///
+    /// # Safety
+    /// `buffer` must be a valid WGPUBuffer from the environment's WebGPU device,
+    /// with storage usage, sufficient size and the specified packed tensor layout.
+    /// `release` must release exactly the caller-owned reference to that buffer.
+    /// On error, the caller retains ownership. The environment must outlive this tensor.
+    pub unsafe fn from_packed_webgpu_buffer(
+        environment: &Environment,
+        element_type: ElementType,
+        dimensions: &[i32],
+        buffer: *mut c_void,
+        buffer_size: usize,
+        release: unsafe extern "C" fn(*mut c_void),
+    ) -> Result<Self, Error> {
+        let mut tensor_type = LiteRtRankedTensorType::default();
+        if dimensions.len() > tensor_type.layout.dimensions.len()
+            || dimensions.iter().any(|dimension| *dimension <= 0)
+            || buffer.is_null()
+        {
+            return Err(Error::new(
+                ErrorCause::CreateTensorBufferFromWebGpuBuffer,
+                LiteRtStatus_kLiteRtStatusErrorInvalidArgument,
+            ));
+        }
+        tensor_type.element_type = element_type.to_c_enum();
+        tensor_type.layout.set_rank(dimensions.len() as u32);
+        tensor_type.layout.dimensions[..dimensions.len()].copy_from_slice(dimensions);
+        let mut raw_tensor_buffer = std::ptr::null_mut();
+        call_check_status!(
+            // SAFETY: the caller guarantees device, layout, size and buffer validity.
+            unsafe {
+                LiteRtCreateTensorBufferFromWebGpuBuffer(
+                    environment.raw_environment,
+                    &tensor_type,
+                    LiteRtTensorBufferType_kLiteRtTensorBufferTypeWebGpuBufferPacked,
+                    buffer.cast(),
+                    buffer_size,
+                    None,
+                    &mut raw_tensor_buffer,
+                )
+            },
+            ErrorCause::CreateTensorBufferFromWebGpuBuffer
+        );
+        Ok(Self {
+            raw_tensor_buffer,
+            element_type,
+            dimensions: dimensions.to_vec(),
+            imported_webgpu_buffer: Some(ImportedWebGpuBuffer { handle: buffer, release }),
+            _phantom: PhantomData,
+        })
+    }
+
+    /// Returns the borrowed buffer supplied to [`Self::from_packed_webgpu_buffer`].
+    pub fn imported_webgpu_buffer(&self) -> Option<*mut c_void> {
+        self.imported_webgpu_buffer.as_ref().map(|buffer| buffer.handle)
     }
 
     /// Writes data to the tensor buffer.
@@ -446,6 +665,13 @@ impl<'a> TensorBuffer<'a> {
         unsafe {
             std::ptr::copy(lock.raw_data, data.as_mut_ptr(), to_copy);
         }
+        drop(lock);
+        #[cfg(async_support)]
+        call_check_status!(
+            // SAFETY: self.raw_tensor_buffer is always valid.
+            unsafe { LiteRtClearTensorBufferEvent(self.raw_tensor_buffer) },
+            ErrorCause::ClearTensorBufferEvent
+        );
         Ok(to_copy)
     }
 
@@ -616,6 +842,9 @@ mod tests {
     #[test]
     fn test_element_type_compatibility() {
         assert!(ElementType::Bool.is_compatible::<bool>());
+        assert!(ElementType::UInt8.is_compatible::<u8>());
+        assert!(ElementType::UInt16.is_compatible::<u16>());
+        assert!(ElementType::UInt32.is_compatible::<u32>());
         assert!(!ElementType::Bool.is_compatible::<u32>());
         assert!(!ElementType::Float32.is_compatible::<u32>());
     }
@@ -748,5 +977,6 @@ mod tests {
         block_on(buffer.read_async(&mut output_data)).unwrap();
 
         assert_eq!(input_data, output_data);
+        assert!(!buffer.has_event().unwrap());
     }
 }

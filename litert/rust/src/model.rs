@@ -297,7 +297,7 @@ impl<'a> Subgraph<'a> {
         Ok(num_outputs)
     }
 
-    fn input_tensor(&self, tensor_index: LiteRtParamIndex) -> Result<Tensor<'_>, Error> {
+    pub fn input_tensor(&self, tensor_index: LiteRtParamIndex) -> Result<Tensor<'_>, Error> {
         let mut raw_tensor_ptr: LiteRtTensor = std::ptr::null_mut();
         call_check_status!(
             // SAFETY: self.raw_subgraph is always valid as it's initialized by a wrapper function.
@@ -323,7 +323,7 @@ impl<'a> Subgraph<'a> {
         ));
     }
 
-    fn output_tensor(&self, tensor_index: LiteRtParamIndex) -> Result<Tensor<'_>, Error> {
+    pub fn output_tensor(&self, tensor_index: LiteRtParamIndex) -> Result<Tensor<'_>, Error> {
         let mut raw_tensor_ptr: LiteRtTensor = std::ptr::null_mut();
         call_check_status!(
             // SAFETY: self.raw_subgraph is always valid as it's initialized by a wrapper function.
@@ -395,6 +395,18 @@ impl From<LiteRtParamIndex> for SignatureIndex {
 }
 
 impl Model {
+    /// Schedules constant FP16 conversions before image operations for GPU compilation.
+    /// Preserves weights, signatures and metadata.
+    /// Call before creating any model that borrows this buffer.
+    pub fn prepare_for_gpu(buffer: &mut Vec<u8>) -> Result<(), Error> {
+        crate::model_preparation::prepare(buffer).ok_or_else(|| {
+            Error::new(
+                ErrorCause::PrepareModelForGpu,
+                LiteRtStatus_kLiteRtStatusErrorInvalidArgument,
+            )
+        })
+    }
+
     /// Creates a model from a file path.
     pub fn create_model_from_file(environment: &Environment, path: &str) -> Result<Self, Error> {
         let path_c_string =
@@ -464,13 +476,43 @@ impl Model {
         })
     }
 
+    /// Returns model metadata by key.
+    pub fn metadata(&self, key: &str) -> Result<Option<&[u8]>, Error> {
+        // TODO: Handle interior-NUL CString conversion errors consistently across this crate.
+        let key = CString::new(key).expect("CString::new failed: string contains null bytes");
+        let mut metadata_buffer: *const c_void = std::ptr::null();
+        let mut metadata_buffer_size = 0;
+        let status = unsafe {
+            LiteRtGetModelMetadata(
+                self.raw_model,
+                key.as_ptr(),
+                &mut metadata_buffer,
+                &mut metadata_buffer_size,
+            )
+        };
+        if status == LiteRtStatus_kLiteRtStatusErrorNotFound {
+            return Ok(None);
+        }
+        if status != LiteRtStatus_kLiteRtStatusOk {
+            return Err(Error::new(ErrorCause::GetModelMetadata, status));
+        }
+        if metadata_buffer.is_null() {
+            return Ok(None);
+        }
+        Ok(Some(unsafe {
+            std::slice::from_raw_parts(metadata_buffer.cast::<u8>(), metadata_buffer_size)
+        }))
+    }
+
     /// Returns the signature at the given index.
     pub fn signature(&self, index: SignatureIndex) -> Result<Signature<'_>, Error> {
         let mut raw_signature_ptr: LiteRtSignature = std::ptr::null_mut();
         call_check_status!(
             // SAFETY: self.raw_model is always valid as it's initialized by a wrapper function.
             // We assume that the output is valid if the return status is OK or don't use the output pointers.
-            unsafe { LiteRtGetModelSignature(self.raw_model, index.value(), &mut raw_signature_ptr) },
+            unsafe {
+                LiteRtGetModelSignature(self.raw_model, index.value(), &mut raw_signature_ptr)
+            },
             ErrorCause::GetModelSignature
         );
         Ok(Signature { raw_signature: raw_signature_ptr, _phantom: PhantomData {} })
