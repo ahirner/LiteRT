@@ -404,7 +404,20 @@ pub struct TensorBuffer<'a> {
     pub(crate) raw_tensor_buffer: LiteRtTensorBuffer,
     element_type: ElementType,
     dimensions: Vec<i32>,
+    imported_webgpu_buffer: Option<ImportedWebGpuBuffer>,
     _phantom: PhantomData<&'a LiteRtTensorBuffer>,
+}
+
+struct ImportedWebGpuBuffer {
+    handle: *mut c_void,
+    release: unsafe extern "C" fn(*mut c_void),
+}
+
+impl Drop for ImportedWebGpuBuffer {
+    fn drop(&mut self) {
+        // SAFETY: import transfers one owned reference and its matching release function.
+        unsafe { (self.release)(self.handle) };
+    }
 }
 
 struct TensorBufferLock<'a, T> {
@@ -446,12 +459,12 @@ impl<'a> TensorBuffer<'a> {
             ErrorCause::CreateManagedTensorBuffer
         );
         let dimensions =
-            tensor_type.layout.dimensions[..tensor_type.layout.rank().try_into().unwrap()]
-                .to_vec();
+            tensor_type.layout.dimensions[..tensor_type.layout.rank().try_into().unwrap()].to_vec();
         Ok(TensorBuffer {
             raw_tensor_buffer: buffer_ptr,
             dimensions,
             element_type,
+            imported_webgpu_buffer: None,
             _phantom: PhantomData {},
         })
     }
@@ -524,6 +537,64 @@ impl<'a> TensorBuffer<'a> {
             ErrorCause::GetTensorBufferMetalMemory
         );
         Ok(metal_memory)
+    }
+
+    /// Imports a packed WebGPU buffer and takes ownership on success.
+    ///
+    /// # Safety
+    /// `buffer` must be a valid WGPUBuffer from the environment's WebGPU device,
+    /// with storage usage, sufficient size and the specified packed tensor layout.
+    /// `release` must release exactly the caller-owned reference to that buffer.
+    /// On error, the caller retains ownership. The environment must outlive this tensor.
+    pub unsafe fn from_packed_webgpu_buffer(
+        environment: &Environment,
+        element_type: ElementType,
+        dimensions: &[i32],
+        buffer: *mut c_void,
+        buffer_size: usize,
+        release: unsafe extern "C" fn(*mut c_void),
+    ) -> Result<Self, Error> {
+        let mut tensor_type = LiteRtRankedTensorType::default();
+        if dimensions.len() > tensor_type.layout.dimensions.len()
+            || dimensions.iter().any(|dimension| *dimension <= 0)
+            || buffer.is_null()
+        {
+            return Err(Error::new(
+                ErrorCause::CreateTensorBufferFromWebGpuBuffer,
+                LiteRtStatus_kLiteRtStatusErrorInvalidArgument,
+            ));
+        }
+        tensor_type.element_type = element_type.to_c_enum();
+        tensor_type.layout.set_rank(dimensions.len() as u32);
+        tensor_type.layout.dimensions[..dimensions.len()].copy_from_slice(dimensions);
+        let mut raw_tensor_buffer = std::ptr::null_mut();
+        call_check_status!(
+            // SAFETY: the caller guarantees device, layout, size and buffer validity.
+            unsafe {
+                LiteRtCreateTensorBufferFromWebGpuBuffer(
+                    environment.raw_environment,
+                    &tensor_type,
+                    LiteRtTensorBufferType_kLiteRtTensorBufferTypeWebGpuBufferPacked,
+                    buffer.cast(),
+                    buffer_size,
+                    None,
+                    &mut raw_tensor_buffer,
+                )
+            },
+            ErrorCause::CreateTensorBufferFromWebGpuBuffer
+        );
+        Ok(Self {
+            raw_tensor_buffer,
+            element_type,
+            dimensions: dimensions.to_vec(),
+            imported_webgpu_buffer: Some(ImportedWebGpuBuffer { handle: buffer, release }),
+            _phantom: PhantomData,
+        })
+    }
+
+    /// Returns the borrowed buffer supplied to [`Self::from_packed_webgpu_buffer`].
+    pub fn imported_webgpu_buffer(&self) -> Option<*mut c_void> {
+        self.imported_webgpu_buffer.as_ref().map(|buffer| buffer.handle)
     }
 
     /// Writes data to the tensor buffer.
